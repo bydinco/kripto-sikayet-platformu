@@ -21,7 +21,13 @@ import { NoticesModule } from './notices/notices.module.js';
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
-    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
+    ThrottlerModule.forRoot({
+      throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }],
+      // e2e tests legitimately call login/register far more than 60 times
+      // a minute; NestJS's testing container can't cleanly override a guard
+      // that's bound only via APP_GUARD, so this is disabled by env instead.
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
     PrismaModule,
     AuthModule,
     UsersModule,

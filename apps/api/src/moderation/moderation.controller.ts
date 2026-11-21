@@ -1,10 +1,13 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { ModerationService } from './moderation.service.js';
 import { CreateModerationDto } from './dto/create-moderation.dto.js';
 import { UpdateModerationDto } from './dto/update-moderation.dto.js';
+import { Roles } from '../common/decorators/roles.decorator.js';
 
 @ApiTags('moderation')
+@Roles(Role.ADMIN, Role.MODERATOR)
 @Controller('moderation')
 export class ModerationController {
   constructor(private readonly moderationService: ModerationService) {}

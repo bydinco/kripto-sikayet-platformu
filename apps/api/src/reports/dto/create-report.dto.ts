@@ -1,15 +1,14 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ReportCategory } from '@prisma/client';
-import { IsEnum, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
+// authorId comes from the JWT (@CurrentUser()), never from the client.
+// status/publishedAt/resolvedAt/satisfaction* are moderator-only and are
+// never settable at creation time.
 export class CreateReportDto {
   @ApiProperty()
   @IsString()
   entityId!: string;
-
-  @ApiProperty()
-  @IsString()
-  authorId!: string;
 
   @ApiProperty({ enum: ReportCategory })
   @IsEnum(ReportCategory)
@@ -22,4 +21,14 @@ export class CreateReportDto {
   @ApiProperty()
   @IsString()
   body!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  lossUsd?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  incidentAt?: string;
 }
