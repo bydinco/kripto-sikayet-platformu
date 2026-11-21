@@ -19,6 +19,12 @@ export interface RequestMeta {
   ip?: string;
 }
 
+// A revoked refresh token reused within this window is treated as a
+// harmless race (e.g. two browser tabs refreshing at almost the same
+// moment), not theft: only a 401, no mass session revocation. Older than
+// this, reuse is treated as a stolen token and kills every session.
+const REUSE_GRACE_WINDOW_MS = 10_000;
+
 // Used to run argon2.verify against *something* when the e-mail doesn't
 // exist, so a login attempt takes roughly the same time either way and
 // can't be used to enumerate registered e-mails.
@@ -97,8 +103,11 @@ export class AuthService {
     }
 
     if (existing.revokedAt) {
-      // Reuse of a revoked token: treat as stolen, kill every session.
-      await this.revokeAllForUser(existing.userId);
+      const revokedJustNow = Date.now() - existing.revokedAt.getTime() < REUSE_GRACE_WINDOW_MS;
+      if (!revokedJustNow) {
+        // Reuse of a token revoked a while ago: treat as stolen, kill every session.
+        await this.revokeAllForUser(existing.userId);
+      }
       throw new UnauthorizedException('Oturum geçersiz, tekrar giriş yapın.');
     }
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -75,7 +76,7 @@ describe('Auth (e2e)', () => {
     expect(res.body.email).toBe(email);
   });
 
-  it('rotates the refresh token and revokes the previous one', async () => {
+  it('rotates the refresh token', async () => {
     const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password });
     const firstCookie = extractCookie(login.headers['set-cookie'], 'refreshToken');
 
@@ -86,9 +87,44 @@ describe('Auth (e2e)', () => {
     const secondCookie = extractCookie(refreshed.headers['set-cookie'], 'refreshToken');
 
     expect(secondCookie).not.toBe(firstCookie);
+  });
 
-    // Reusing the now-revoked first token is treated as theft: it fails,
-    // and it must also kill the session that came from the rotation.
+  it('treats an immediate reuse of a just-rotated token as a benign race (401, other session kept alive)', async () => {
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password });
+    const firstCookie = extractCookie(login.headers['set-cookie'], 'refreshToken');
+
+    const refreshed = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', firstCookie)
+      .expect(200);
+    const secondCookie = extractCookie(refreshed.headers['set-cookie'], 'refreshToken');
+
+    // Reusing the just-revoked first token immediately (e.g. a second
+    // browser tab) is within the grace window: it fails, but it must NOT
+    // kill the session that came from the rotation.
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', firstCookie).expect(401);
+    await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', secondCookie).expect(200);
+  });
+
+  it('treats reuse of a token revoked long ago as theft and kills every session', async () => {
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password });
+    const firstCookie = extractCookie(login.headers['set-cookie'], 'refreshToken');
+
+    const refreshed = await request(app.getHttpServer())
+      .post('/auth/refresh')
+      .set('Cookie', firstCookie)
+      .expect(200);
+    const secondCookie = extractCookie(refreshed.headers['set-cookie'], 'refreshToken');
+
+    // Simulate the revocation having happened well outside the grace window.
+    const prisma = app.get(PrismaService);
+    const firstToken = firstCookie.split('=')[1];
+    const tokenHash = createHash('sha256').update(firstToken).digest('hex');
+    await prisma.refreshToken.update({
+      where: { tokenHash },
+      data: { revokedAt: new Date(Date.now() - 15_000) },
+    });
+
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', firstCookie).expect(401);
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', secondCookie).expect(401);
   });

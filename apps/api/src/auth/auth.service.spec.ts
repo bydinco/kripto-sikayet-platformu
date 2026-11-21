@@ -100,12 +100,12 @@ describe('AuthService', () => {
     expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 
-  it('revokes every session for the user when a revoked refresh token is reused', async () => {
+  it('revokes every session when a token revoked more than 10s ago is reused (stolen)', async () => {
     prisma.refreshToken.findUnique.mockResolvedValue({
       id: 'rt1',
       userId: 'u1',
       tokenHash: 'hash',
-      revokedAt: new Date(),
+      revokedAt: new Date(Date.now() - 15_000),
       expiresAt: new Date(Date.now() + 1000 * 60 * 60),
     });
 
@@ -114,5 +114,19 @@ describe('AuthService', () => {
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 'u1', revokedAt: null } }),
     );
+  });
+
+  it('does not revoke other sessions when a just-revoked token is reused within the grace window', async () => {
+    prisma.refreshToken.findUnique.mockResolvedValue({
+      id: 'rt1',
+      userId: 'u1',
+      tokenHash: 'hash',
+      revokedAt: new Date(Date.now() - 2_000),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60),
+    });
+
+    await expect(service.refresh('raced-token', {})).rejects.toBeInstanceOf(UnauthorizedException);
+
+    expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });
