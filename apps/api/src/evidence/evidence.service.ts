@@ -60,8 +60,9 @@ export class EvidenceService {
     return this.prisma.evidence.create({ data: { ...dto, approved } });
   }
 
-  async findAll(currentUser?: JwtPayload) {
+  async findAll(currentUser?: JwtPayload, reportId?: string) {
     const evidences = await this.prisma.evidence.findMany({
+      where: reportId ? { reportId } : undefined,
       include: { report: { select: { status: true, authorId: true } } },
     });
     return evidences

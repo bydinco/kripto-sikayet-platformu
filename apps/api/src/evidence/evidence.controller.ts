@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { EvidenceService } from './evidence.service.js';
 import { CreateEvidenceDto } from './dto/create-evidence.dto.js';
@@ -19,8 +19,8 @@ export class EvidenceController {
 
   @OptionalAuth()
   @Get()
-  findAll(@CurrentUser() currentUser?: JwtPayload) {
-    return this.evidenceService.findAll(currentUser);
+  findAll(@CurrentUser() currentUser?: JwtPayload, @Query('reportId') reportId?: string) {
+    return this.evidenceService.findAll(currentUser, reportId);
   }
 
   @OptionalAuth()
