@@ -5,7 +5,12 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    super({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+    super({
+      adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+      // passwordHash/emailVerificationToken never come back from any query,
+      // app-wide, even in code added later.
+      omit: { user: { passwordHash: true, emailVerificationToken: true } },
+    });
   }
 
   async onModuleInit() {
