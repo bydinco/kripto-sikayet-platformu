@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service.js';
@@ -44,5 +44,19 @@ export class ReportsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.reportsService.remove(id);
+  }
+
+  // Brand-initiated "mark as resolved" flow, separate from the moderator
+  // transition mechanism above: the brand requests, the complainant approves.
+  @HttpCode(200)
+  @Post(':id/resolution-request')
+  requestResolution(@Param('id') id: string, @CurrentUser() currentUser: JwtPayload) {
+    return this.reportsService.requestResolution(id, currentUser);
+  }
+
+  @HttpCode(200)
+  @Post(':id/resolution-approve')
+  approveResolution(@Param('id') id: string, @CurrentUser() currentUser: JwtPayload) {
+    return this.reportsService.approveResolution(id, currentUser);
   }
 }

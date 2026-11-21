@@ -115,6 +115,58 @@ export class ReportsService {
     return this.prisma.report.delete({ where: { id } });
   }
 
+  async requestResolution(id: string, currentUser: JwtPayload) {
+    const report = await this.prisma.report.findUnique({
+      where: { id },
+      include: { entity: { select: { ownerId: true } } },
+    });
+    if (!report) {
+      throw new NotFoundException('Şikayet bulunamadı.');
+    }
+    if (currentUser.role !== Role.ENTITY_OWNER || report.entity.ownerId !== currentUser.sub) {
+      throw new ForbiddenException('Sadece ilgili varlığın sahibi çözüm talep edebilir.');
+    }
+    if (report.status !== ReportStatus.PUBLISHED && report.status !== ReportStatus.DISPUTED) {
+      throw new ForbiddenException('Sadece yayınlanmış veya tartışmalı şikayetler için çözüm talep edilebilir.');
+    }
+    return this.prisma.report.update({ where: { id }, data: { resolutionRequestedAt: new Date() } });
+  }
+
+  async approveResolution(id: string, currentUser: JwtPayload) {
+    const report = await this.prisma.report.findUnique({ where: { id } });
+    if (!report) {
+      throw new NotFoundException('Şikayet bulunamadı.');
+    }
+    if (report.authorId !== currentUser.sub) {
+      throw new ForbiddenException('Sadece şikayet eden çözümü onaylayabilir.');
+    }
+    if (!report.resolutionRequestedAt) {
+      throw new BadRequestException('Bekleyen bir çözüm talebi yok.');
+    }
+    if (report.status !== ReportStatus.PUBLISHED && report.status !== ReportStatus.DISPUTED) {
+      throw new BadRequestException('Bu şikayet artık onaylanabilir durumda değil.');
+    }
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.report.update({
+        where: { id },
+        data: { status: ReportStatus.RESOLVED, resolvedAt: new Date(), resolutionRequestedAt: null },
+      }),
+      this.prisma.reportStatusHistory.create({
+        data: {
+          reportId: id,
+          fromStatus: report.status,
+          toStatus: ReportStatus.RESOLVED,
+          actorId: currentUser.sub,
+          actorType: StatusActorType.AUTHOR,
+        },
+      }),
+    ]);
+
+    await this.entityStats.recomputeStats(report.entityId);
+    return updated;
+  }
+
   private async applyModeratorTransition(
     report: { id: string; entityId: string; status: ReportStatus },
     dto: UpdateReportDto,
