@@ -16,7 +16,7 @@ export class ReportsController {
 
   @Post()
   create(@Body() createReportDto: CreateReportDto, @CurrentUser() currentUser: JwtPayload) {
-    return this.reportsService.create(createReportDto, currentUser.sub);
+    return this.reportsService.create(createReportDto, currentUser);
   }
 
   @Public()

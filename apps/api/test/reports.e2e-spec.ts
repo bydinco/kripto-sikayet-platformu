@@ -117,16 +117,17 @@ describe('Reports (e2e)', () => {
       .expect(403);
   });
 
-  it('lets a moderator change any field, including status', async () => {
+  it('lets a moderator change status (with a reason and approved evidence) plus other fields', async () => {
     const prisma = app.get(PrismaService);
     const report = await prisma.report.create({
       data: { entityId, authorId: author.userId, category: 'RUG_PULL', title: 't', body: 'b' },
     });
+    await prisma.evidence.create({ data: { reportId: report.id, type: 'LINK', value: 'https://example.com' } });
 
     const res = await request(app.getHttpServer())
       .patch(`/reports/${report.id}`)
       .set('Authorization', `Bearer ${moderator.accessToken}`)
-      .send({ status: 'PUBLISHED' })
+      .send({ status: 'PUBLISHED', reason: 'evidence verified' })
       .expect(200);
 
     expect(res.body.status).toBe('PUBLISHED');

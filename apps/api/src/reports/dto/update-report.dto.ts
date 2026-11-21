@@ -2,9 +2,13 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ReportCategory, ReportStatus } from '@prisma/client';
 import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
-// Author-editable fields (allowed only while the report is still
-// PENDING/NEEDS_EVIDENCE) plus moderator-only fields in the same DTO;
-// ReportsService enforces who may set which ones.
+// Three groups of fields, in one DTO because they share a single PATCH
+// endpoint; ReportsService enforces who may use which group and when:
+//  - content: author only, while PENDING/NEEDS_EVIDENCE.
+//  - status/reason: moderator/admin transition (reason mandatory when
+//    status is present; publishedAt/resolvedAt are server-computed, not
+//    here).
+//  - satisfaction*: author only, only once, only after RESOLVED.
 export class UpdateReportDto {
   @ApiPropertyOptional()
   @IsOptional()
@@ -31,22 +35,15 @@ export class UpdateReportDto {
   @IsDateString()
   incidentAt?: string;
 
-  // ─── Moderator/Admin only (see MODERATOR_ONLY_REPORT_FIELDS) ───
-
   @ApiPropertyOptional({ enum: ReportStatus })
   @IsOptional()
   @IsEnum(ReportStatus)
   status?: ReportStatus;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Mandatory whenever status is set.' })
   @IsOptional()
-  @IsDateString()
-  publishedAt?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  resolvedAt?: string;
+  @IsString()
+  reason?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -61,10 +58,5 @@ export class UpdateReportDto {
   satisfactionNote?: string;
 }
 
-export const MODERATOR_ONLY_REPORT_FIELDS = [
-  'status',
-  'publishedAt',
-  'resolvedAt',
-  'satisfactionRating',
-  'satisfactionNote',
-] as const satisfies readonly (keyof UpdateReportDto)[];
+export const CONTENT_FIELDS = ['category', 'title', 'body', 'lossUsd', 'incidentAt'] as const satisfies readonly (keyof UpdateReportDto)[];
+export const SATISFACTION_FIELDS = ['satisfactionRating', 'satisfactionNote'] as const satisfies readonly (keyof UpdateReportDto)[];
