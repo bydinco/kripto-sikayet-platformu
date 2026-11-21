@@ -3,12 +3,19 @@ import { Role, ReportStatus, StatusActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EntityStatsService } from '../entities/entity-stats.service.js';
 import { CreateResponseDto } from './dto/create-response.dto.js';
+import { isPublicStatus } from '../reports/report-state-machine.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
 const RESPONDABLE_STATUSES: ReportStatus[] = [ReportStatus.PUBLISHED, ReportStatus.DISPUTED];
 
 function isModerator(role: Role): boolean {
   return role === Role.ADMIN || role === Role.MODERATOR;
+}
+
+function canView(report: { status: ReportStatus; authorId: string }, currentUser?: JwtPayload): boolean {
+  if (isPublicStatus(report.status)) return true;
+  if (!currentUser) return false;
+  return isModerator(currentUser.role) || report.authorId === currentUser.sub;
 }
 
 @Injectable()
@@ -68,11 +75,20 @@ export class ResponsesService {
     return response;
   }
 
-  async findAll(reportId: string) {
+  async findAll(reportId: string, currentUser?: JwtPayload) {
     const report = await this.prisma.report.findUnique({ where: { id: reportId } });
-    if (!report || report.status !== ReportStatus.PUBLISHED) {
+    if (!report || !canView(report, currentUser)) {
       throw new NotFoundException('Şikayet bulunamadı.');
     }
-    return this.prisma.entityResponse.findMany({ where: { reportId }, orderBy: { createdAt: 'asc' } });
+    const responses = await this.prisma.entityResponse.findMany({
+      where: { reportId },
+      orderBy: { createdAt: 'asc' },
+    });
+    // Every response on a currently-disputed report carries this flag, not
+    // just the one that triggered the dispute, so the UI can show a
+    // "Marka itiraz etti" banner without a second request — and the dispute
+    // never hides the report or its responses.
+    const disputed = report.status === ReportStatus.DISPUTED;
+    return responses.map((response) => ({ ...response, disputed }));
   }
 }

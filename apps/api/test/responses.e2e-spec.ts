@@ -119,6 +119,12 @@ describe('Entity responses (e2e)', () => {
     });
     expect(history?.actorType).toBe(StatusActorType.ENTITY);
     expect(history?.actorId).toBe(owner.userId);
+
+    // The dispute must not hide the report or its responses from the public.
+    await request(app.getHttpServer()).get(`/reports/${reportId}`).expect(200);
+    const responses = await request(app.getHttpServer()).get(`/reports/${reportId}/responses`).expect(200);
+    expect(responses.body).toHaveLength(1);
+    expect(responses.body[0].disputed).toBe(true);
   });
 
   it("forbids an entity owner from responding to a report about an entity they don't own", async () => {

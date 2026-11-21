@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ResponsesService } from './responses.service.js';
 import { CreateResponseDto } from './dto/create-response.dto.js';
-import { Public } from '../common/decorators/public.decorator.js';
+import { OptionalAuth } from '../common/decorators/optional-auth.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
@@ -21,9 +21,9 @@ export class ResponsesController {
     return this.responsesService.create(reportId, dto, currentUser);
   }
 
-  @Public()
+  @OptionalAuth()
   @Get()
-  findAll(@Param('reportId') reportId: string) {
-    return this.responsesService.findAll(reportId);
+  findAll(@Param('reportId') reportId: string, @CurrentUser() currentUser?: JwtPayload) {
+    return this.responsesService.findAll(reportId, currentUser);
   }
 }

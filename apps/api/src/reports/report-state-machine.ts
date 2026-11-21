@@ -53,6 +53,15 @@ const ACTION_FOR_TRANSITION: Record<string, ModerationAction> = {
   [key(REMOVED, PUBLISHED)]: ModerationAction.RESTORE,
 };
 
+// Visible to anyone, logged in or not. Everything else (PENDING,
+// NEEDS_EVIDENCE, REJECTED, REMOVED) is visible only to its author or to
+// MODERATOR/ADMIN.
+export const PUBLIC_REPORT_STATUSES: ReportStatus[] = [PUBLISHED, DISPUTED, RESOLVED];
+
+export function isPublicStatus(status: ReportStatus): boolean {
+  return PUBLIC_REPORT_STATUSES.includes(status);
+}
+
 export function moderationActionFor(from: ReportStatus, to: ReportStatus): ModerationAction {
   const action = ACTION_FOR_TRANSITION[key(from, to)];
   if (!action) {

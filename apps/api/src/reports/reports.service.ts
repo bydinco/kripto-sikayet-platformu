@@ -10,7 +10,13 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { EntityStatsService } from '../entities/entity-stats.service.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { CONTENT_FIELDS, SATISFACTION_FIELDS, UpdateReportDto } from './dto/update-report.dto.js';
-import { isAdminOnlyTransition, isValidTransition, moderationActionFor } from './report-state-machine.js';
+import {
+  isAdminOnlyTransition,
+  isPublicStatus,
+  isValidTransition,
+  moderationActionFor,
+  PUBLIC_REPORT_STATUSES,
+} from './report-state-machine.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
 const ACTIVE_STATUSES_FOR_DUPLICATE_CHECK: ReportStatus[] = [
@@ -80,16 +86,39 @@ export class ReportsService {
     return this.prisma.report.create({ data: { ...dto, authorId: currentUser.sub } });
   }
 
-  findAll() {
-    return this.prisma.report.findMany({ where: { status: ReportStatus.PUBLISHED } });
+  findAll(currentUser?: JwtPayload) {
+    if (currentUser && isModerator(currentUser.role)) {
+      return this.prisma.report.findMany();
+    }
+    return this.prisma.report.findMany({
+      where: {
+        OR: [
+          { status: { in: PUBLIC_REPORT_STATUSES } },
+          ...(currentUser ? [{ authorId: currentUser.sub }] : []),
+        ],
+      },
+    });
   }
 
-  async findOne(id: string) {
+  findMine(currentUser: JwtPayload) {
+    return this.prisma.report.findMany({
+      where: { authorId: currentUser.sub },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findOne(id: string, currentUser?: JwtPayload) {
     const report = await this.prisma.report.findUnique({ where: { id } });
-    if (!report || report.status !== ReportStatus.PUBLISHED) {
+    if (!report || !this.canView(report, currentUser)) {
       throw new NotFoundException('Şikayet bulunamadı.');
     }
     return report;
+  }
+
+  private canView(report: { status: ReportStatus; authorId: string }, currentUser?: JwtPayload): boolean {
+    if (isPublicStatus(report.status)) return true;
+    if (!currentUser) return false;
+    return isModerator(currentUser.role) || report.authorId === currentUser.sub;
   }
 
   async update(id: string, dto: UpdateReportDto, currentUser: JwtPayload) {

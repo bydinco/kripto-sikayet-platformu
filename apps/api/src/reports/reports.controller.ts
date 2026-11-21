@@ -4,7 +4,7 @@ import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { UpdateReportDto } from './dto/update-report.dto.js';
-import { Public } from '../common/decorators/public.decorator.js';
+import { OptionalAuth } from '../common/decorators/optional-auth.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
@@ -19,16 +19,21 @@ export class ReportsController {
     return this.reportsService.create(createReportDto, currentUser);
   }
 
-  @Public()
+  @OptionalAuth()
   @Get()
-  findAll() {
-    return this.reportsService.findAll();
+  findAll(@CurrentUser() currentUser?: JwtPayload) {
+    return this.reportsService.findAll(currentUser);
   }
 
-  @Public()
+  @Get('mine')
+  findMine(@CurrentUser() currentUser: JwtPayload) {
+    return this.reportsService.findMine(currentUser);
+  }
+
+  @OptionalAuth()
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.reportsService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() currentUser?: JwtPayload) {
+    return this.reportsService.findOne(id, currentUser);
   }
 
   @Patch(':id')

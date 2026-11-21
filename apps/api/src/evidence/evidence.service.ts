@@ -3,6 +3,7 @@ import { Role, ReportStatus, StatusActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateEvidenceDto } from './dto/create-evidence.dto.js';
 import { UpdateEvidenceDto } from './dto/update-evidence.dto.js';
+import { isPublicStatus } from '../reports/report-state-machine.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
 function isModerator(role: Role): boolean {
@@ -17,8 +18,8 @@ function canView(
   if (currentUser && (isModerator(currentUser.role) || report.authorId === currentUser.sub)) {
     return true;
   }
-  // Public visitors only ever see approved evidence on a published report.
-  return evidence.approved && report.status === ReportStatus.PUBLISHED;
+  // Public visitors only ever see approved evidence on a publicly visible report.
+  return evidence.approved && isPublicStatus(report.status);
 }
 
 @Injectable()
@@ -36,9 +37,7 @@ export class EvidenceService {
 
     // Evidence the author bolts on *after* the report already went public
     // waits for a moderator's approval before anyone else can see it.
-    const addedPostPublicationByNonModerator =
-      (report.status === ReportStatus.PUBLISHED || report.status === ReportStatus.DISPUTED) &&
-      !isModerator(currentUser.role);
+    const addedPostPublicationByNonModerator = isPublicStatus(report.status) && !isModerator(currentUser.role);
     const approved = !addedPostPublicationByNonModerator;
 
     if (report.status === ReportStatus.NEEDS_EVIDENCE && report.authorId === currentUser.sub) {

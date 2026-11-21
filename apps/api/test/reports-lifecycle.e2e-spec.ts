@@ -220,4 +220,70 @@ describe('Reports lifecycle (e2e)', () => {
     const publishedId = await publishReport(await createEntity());
     await transition(publishedId, author.accessToken, { title: 'too late' }).expect(403);
   });
+
+  it('keeps RESOLVED reports publicly visible (GET /reports and GET /reports/:id)', async () => {
+    const reportId = await publishReport(await createEntity());
+    await transition(reportId, moderator.accessToken, { status: 'RESOLVED', reason: 'done' }).expect(200);
+
+    const res = await request(app.getHttpServer()).get(`/reports/${reportId}`).expect(200);
+    expect(res.body.status).toBe('RESOLVED');
+
+    const list = await request(app.getHttpServer()).get('/reports').expect(200);
+    expect(list.body.map((r: { id: string }) => r.id)).toContain(reportId);
+  });
+
+  it('hides REJECTED and REMOVED reports from the public', async () => {
+    const rejectedId = await createPendingReport(await createEntity());
+    await transition(rejectedId, moderator.accessToken, { status: 'REJECTED', reason: 'no merit' }).expect(200);
+    await request(app.getHttpServer()).get(`/reports/${rejectedId}`).expect(404);
+
+    const removedId = await publishReport(await createEntity());
+    await transition(removedId, moderator.accessToken, { status: 'REMOVED', reason: 'bad' }).expect(200);
+    await request(app.getHttpServer()).get(`/reports/${removedId}`).expect(404);
+
+    const list = await request(app.getHttpServer()).get('/reports').expect(200);
+    const ids = list.body.map((r: { id: string }) => r.id);
+    expect(ids).not.toContain(rejectedId);
+    expect(ids).not.toContain(removedId);
+  });
+
+  it("returns 404 for someone else's PENDING report, both anonymously and as an unrelated user", async () => {
+    const reportId = await createPendingReport(await createEntity());
+    await request(app.getHttpServer()).get(`/reports/${reportId}`).expect(404);
+
+    const stranger = await registerAndLogin(app, 'life-stranger-visibility');
+    extraUserEmails.push(stranger.email);
+    await request(app.getHttpServer())
+      .get(`/reports/${reportId}`)
+      .set('Authorization', `Bearer ${stranger.accessToken}`)
+      .expect(404);
+
+    // ...but the author and a moderator can still see it.
+    await request(app.getHttpServer())
+      .get(`/reports/${reportId}`)
+      .set('Authorization', `Bearer ${author.accessToken}`)
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/reports/${reportId}`)
+      .set('Authorization', `Bearer ${moderator.accessToken}`)
+      .expect(200);
+  });
+
+  it('lets the author see all of their own reports via GET /reports/mine, regardless of status', async () => {
+    const pendingId = await createPendingReport(await createEntity());
+    const rejectedId = await createPendingReport(await createEntity());
+    await transition(rejectedId, moderator.accessToken, { status: 'REJECTED', reason: 'no merit' }).expect(200);
+
+    const res = await request(app.getHttpServer())
+      .get('/reports/mine')
+      .set('Authorization', `Bearer ${author.accessToken}`)
+      .expect(200);
+    const ids = res.body.map((r: { id: string }) => r.id);
+    expect(ids).toContain(pendingId);
+    expect(ids).toContain(rejectedId);
+  });
+
+  it('requires login for GET /reports/mine', async () => {
+    await request(app.getHttpServer()).get('/reports/mine').expect(401);
+  });
 });
