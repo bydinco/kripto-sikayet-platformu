@@ -242,6 +242,7 @@ model User {
   apiKeys       ApiKey[]
   subscriptions Subscription[]
   handledNotices Notice[]           @relation("NoticeHandler")
+  reportStatusChanges ReportStatusHistory[]
 }
 
 // Rotating refresh tokens. Only the hash is stored; the raw token lives
@@ -580,16 +581,18 @@ model Report {
   publishedAt DateTime?
   updatedAt   DateTime       @updatedAt
 
-  resolvedAt         DateTime?
-  satisfactionRating Int?
-  satisfactionNote   String?
+  resolvedAt           DateTime?
+  satisfactionRating   Int?
+  satisfactionNote     String?
+  resolutionRequestedAt DateTime?
 
-  evidences Evidence[]
-  votes     ReportVote[]
-  comments  ReportComment[]
-  responses EntityResponse[]
-  modLogs   ModerationLog[]
-  notices   Notice[]
+  evidences     Evidence[]
+  votes         ReportVote[]
+  comments      ReportComment[]
+  responses     EntityResponse[]
+  modLogs       ModerationLog[]
+  notices       Notice[]
+  statusHistory ReportStatusHistory[]
 
   @@index([entityId, status])
   @@index([authorId])
@@ -606,10 +609,38 @@ model Evidence {
   chainId         String?
   chain           Chain?       @relation(fields: [chainId], references: [id])
   verifiedOnChain Boolean      @default(false)
+  // false when the author adds evidence to an already-PUBLISHED/DISPUTED
+  // report: hidden from the public until a moderator approves it.
+  approved        Boolean      @default(true)
   createdAt       DateTime     @default(now())
 
   @@index([reportId])
   @@index([value])
+}
+
+enum StatusActorType {
+  MODERATOR
+  AUTHOR
+  ENTITY
+  SYSTEM
+}
+
+// Full audit trail of every Report.status change, regardless of who
+// triggered it. ModerationLog stays narrower: only formal moderator/admin
+// decisions (with a mandatory reason).
+model ReportStatusHistory {
+  id         String          @id @default(cuid())
+  reportId   String
+  report     Report          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  fromStatus ReportStatus
+  toStatus   ReportStatus
+  actorId    String
+  actor      User            @relation(fields: [actorId], references: [id])
+  actorType  StatusActorType
+  reason     String?
+  createdAt  DateTime        @default(now())
+
+  @@index([reportId, createdAt])
 }
 
 model ReportVote {
