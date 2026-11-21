@@ -219,9 +219,15 @@ model User {
   country       String?
   trustScore    Int       @default(0)
   emailVerified Boolean   @default(false)
+  // Nullable: wallet-only sign-in (no password) is a later step.
+  passwordHash  String?
+  // TODO: email verification is not sent/checked yet, only the field exists.
+  emailVerificationToken          String?
+  emailVerificationTokenExpiresAt DateTime?
   createdAt     DateTime  @default(now())
   deletedAt     DateTime? // soft delete for GDPR/KVKK requests
 
+  refreshTokens RefreshToken[]
   reports       Report[]            @relation("ReportAuthor")
   votes         ReportVote[]
   comments      ReportComment[]
@@ -236,6 +242,23 @@ model User {
   apiKeys       ApiKey[]
   subscriptions Subscription[]
   handledNotices Notice[]           @relation("NoticeHandler")
+}
+
+// Rotating refresh tokens. Only the hash is stored; the raw token lives
+// only in the httpOnly cookie. Reuse of an already-revoked token means the
+// token was stolen, so AuthService revokes every token for that user.
+model RefreshToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ═════════════ CATALOG ═════════════
