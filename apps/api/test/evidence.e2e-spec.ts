@@ -108,4 +108,31 @@ describe('Evidence (e2e)', () => {
       .set('Authorization', `Bearer ${moderator.accessToken}`)
       .expect(200);
   });
+
+  it.each(['not-a-url', 'javascript:alert(1)', 'ftp://example.com/file'])(
+    'rejects a non-http(s) LINK value: %s',
+    async (value) => {
+      await request(app.getHttpServer())
+        .post('/evidence')
+        .set('Authorization', `Bearer ${author.accessToken}`)
+        .send({ reportId: pendingReportId, type: 'LINK', value })
+        .expect(400);
+    },
+  );
+
+  it('accepts a valid http(s) LINK value', async () => {
+    await request(app.getHttpServer())
+      .post('/evidence')
+      .set('Authorization', `Bearer ${author.accessToken}`)
+      .send({ reportId: pendingReportId, type: 'LINK', value: 'https://example.com/new-proof' })
+      .expect(201);
+  });
+
+  it('does not require value to be a URL for non-LINK types', async () => {
+    await request(app.getHttpServer())
+      .post('/evidence')
+      .set('Authorization', `Bearer ${author.accessToken}`)
+      .send({ reportId: pendingReportId, type: 'TX_HASH', value: '0xabc123' })
+      .expect(201);
+  });
 });

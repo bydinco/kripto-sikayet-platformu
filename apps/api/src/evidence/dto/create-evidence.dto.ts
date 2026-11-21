@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EvidenceType } from '@prisma/client';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsValidEvidenceValue } from '../validators/is-valid-evidence-value.validator.js';
 
 export class CreateEvidenceDto {
   @ApiProperty()
@@ -11,9 +12,9 @@ export class CreateEvidenceDto {
   @IsEnum(EvidenceType)
   type!: EvidenceType;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Must be an http(s) URL when type is LINK.' })
   @IsOptional()
-  @IsString()
+  @IsValidEvidenceValue()
   value?: string;
 
   @ApiPropertyOptional()
