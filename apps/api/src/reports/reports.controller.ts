@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ReportsService } from './reports.service.js';
@@ -21,8 +21,15 @@ export class ReportsController {
 
   @OptionalAuth()
   @Get()
-  findAll(@CurrentUser() currentUser?: JwtPayload) {
-    return this.reportsService.findAll(currentUser);
+  findAll(
+    @CurrentUser() currentUser?: JwtPayload,
+    @Query('entityId') entityId?: string,
+    @Query('take') take?: string,
+  ) {
+    return this.reportsService.findAll(currentUser, {
+      entityId,
+      take: take ? Number(take) : undefined,
+    });
   }
 
   @Get('mine')

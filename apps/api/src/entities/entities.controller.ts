@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { EntitiesService } from './entities.service.js';
@@ -20,8 +20,8 @@ export class EntitiesController {
 
   @Public()
   @Get()
-  findAll() {
-    return this.entitiesService.findAll();
+  findAll(@Query('q') q?: string) {
+    return this.entitiesService.findAll(q);
   }
 
   @Public()
@@ -29,6 +29,8 @@ export class EntitiesController {
   findOne(@Param('id') id: string) {
     return this.entitiesService.findOne(id);
   }
+
+  // Note: ':id' above also matches a slug, since findOne() checks both.
 
   @Roles(Role.ADMIN, Role.EDITOR)
   @Patch(':id')

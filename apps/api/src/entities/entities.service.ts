@@ -11,12 +11,19 @@ export class EntitiesService {
     return this.prisma.entity.create({ data: createEntityDto });
   }
 
-  findAll() {
-    return this.prisma.entity.findMany();
+  findAll(q?: string) {
+    return this.prisma.entity.findMany({
+      where: q ? { name: { contains: q, mode: 'insensitive' } } : undefined,
+      orderBy: { name: 'asc' },
+    });
   }
 
-  findOne(id: string) {
-    return this.prisma.entity.findUnique({ where: { id } });
+  // Accepts either the cuid or the slug, so URLs can use the readable slug.
+  findOne(idOrSlug: string) {
+    return this.prisma.entity.findFirst({
+      where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+      include: { stats: true },
+    });
   }
 
   update(id: string, updateEntityDto: UpdateEntityDto) {

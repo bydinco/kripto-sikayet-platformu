@@ -86,17 +86,28 @@ export class ReportsService {
     return this.prisma.report.create({ data: { ...dto, authorId: currentUser.sub } });
   }
 
-  findAll(currentUser?: JwtPayload) {
+  findAll(currentUser?: JwtPayload, filters?: { entityId?: string; take?: number }) {
+    const requestedTake = filters?.take;
+    const take = Math.min(Math.max(Number.isFinite(requestedTake) ? requestedTake! : 20, 1), 50);
+    const orderBy = [
+      { publishedAt: { sort: 'desc' as const, nulls: 'last' as const } },
+      { createdAt: 'desc' as const },
+    ];
+    const entityWhere = filters?.entityId ? { entityId: filters.entityId } : {};
+
     if (currentUser && isModerator(currentUser.role)) {
-      return this.prisma.report.findMany();
+      return this.prisma.report.findMany({ where: entityWhere, orderBy, take });
     }
     return this.prisma.report.findMany({
       where: {
+        ...entityWhere,
         OR: [
           { status: { in: PUBLIC_REPORT_STATUSES } },
           ...(currentUser ? [{ authorId: currentUser.sub }] : []),
         ],
       },
+      orderBy,
+      take,
     });
   }
 
