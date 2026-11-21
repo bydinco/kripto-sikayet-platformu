@@ -14,6 +14,7 @@ import { EvidenceModule } from './evidence/evidence.module.js';
 import { ScoringModule } from './scoring/scoring.module.js';
 import { ModerationModule } from './moderation/moderation.module.js';
 import { NoticesModule } from './notices/notices.module.js';
+import { ResponsesModule } from './responses/responses.module.js';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { NoticesModule } from './notices/notices.module.js';
     ScoringModule,
     ModerationModule,
     NoticesModule,
+    ResponsesModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
