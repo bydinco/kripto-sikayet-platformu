@@ -1,0 +1,901 @@
+// Global crypto complaint, risk score, blog and news platform
+// Stack: PostgreSQL + Prisma (NestJS)
+// Sections: enums, users, catalog, risk scoring, complaints, legal notices,
+//           content (blog/news), engagement, monetization
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═════════════ ENUMS ═════════════
+
+enum Role {
+  USER
+  ENTITY_OWNER
+  EDITOR
+  MODERATOR
+  ADMIN
+}
+
+enum EntityType {
+  COIN
+  EXCHANGE
+  DEX
+  WALLET
+  DEFI_PROTOCOL
+  NFT_PROJECT
+  LAUNCHPAD
+  INFLUENCER
+  SIGNAL_GROUP
+  INVESTMENT_PLATFORM
+  MINING_PLATFORM
+  AIRDROP
+  OTHER
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+  DEFUNCT
+  MERGED
+}
+
+enum WalletKind {
+  HARDWARE
+  MOBILE
+  DESKTOP
+  BROWSER_EXTENSION
+  CUSTODIAL
+}
+
+enum LinkKind {
+  WEBSITE
+  X
+  TELEGRAM
+  DISCORD
+  YOUTUBE
+  INSTAGRAM
+  TIKTOK
+  GITHUB
+  DOCS
+  APP_STORE
+  PLAY_STORE
+  OTHER
+}
+
+enum AddressLabel {
+  TREASURY
+  DEPLOYER
+  DEPOSIT
+  LIQUIDITY
+  TEAM
+  REPORTED
+}
+
+enum ReportCategory {
+  RUG_PULL
+  WITHDRAWAL_BLOCKED
+  ACCOUNT_FROZEN
+  HIDDEN_FEES
+  FALSE_PROMOTION
+  UNDISCLOSED_SPONSORSHIP
+  FAKE_GUARANTEE
+  PHISHING_IMPERSONATION
+  HONEYPOT
+  FAKE_DEVICE
+  FUNDS_LOST_AFTER_SETUP
+  SUPPORT_UNRESPONSIVE
+  DELIVERY_PROBLEM
+  FAKE_AIRDROP
+  PONZI_PATTERN
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  NEEDS_EVIDENCE
+  PUBLISHED
+  DISPUTED
+  RESOLVED
+  REJECTED
+  REMOVED
+}
+
+enum EvidenceType {
+  TX_HASH
+  WALLET_ADDRESS
+  SCREENSHOT
+  LINK
+  VIDEO
+  DOCUMENT
+  INVOICE
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH_RISK_SIGNAL
+  CRITICAL_SIGNAL
+  INSUFFICIENT_DATA
+}
+
+enum RiskEventKind {
+  LIQUIDITY_REMOVED
+  OWNER_CHANGED
+  CONTRACT_UPGRADED
+  LARGE_HOLDER_SELL
+  DOMAIN_CHANGED
+  LICENSE_REVOKED
+  HACK_REPORTED
+  WITHDRAWALS_PAUSED
+  REPORT_SPIKE
+  AUDIT_PUBLISHED
+}
+
+enum ModerationAction {
+  APPROVE
+  REQUEST_EVIDENCE
+  REJECT
+  REMOVE
+  RESTORE
+  FLAG_LEGAL
+  EDIT
+}
+
+enum NoticeType {
+  REMOVAL_REQUEST
+  CORRECTION_REQUEST
+  COURT_ORDER
+  PRIVACY_REQUEST
+  COPYRIGHT
+}
+
+enum NoticeStatus {
+  RECEIVED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
+
+enum PostType {
+  BLOG
+  NEWS
+  GUIDE
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AlertKind {
+  NEW_REPORT
+  SCORE_CHANGED
+  RISK_EVENT
+  BRAND_REPLY
+  NEW_POST
+}
+
+enum AlertChannel {
+  EMAIL
+  TELEGRAM
+  PUSH
+}
+
+enum PlanAudience {
+  ENTITY
+  API
+  USER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum ClaimStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ═════════════ USERS ═════════════
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  handle        String    @unique
+  role          Role      @default(USER)
+  locale        String    @default("en")
+  country       String?
+  trustScore    Int       @default(0)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime? // soft delete for GDPR/KVKK requests
+
+  reports       Report[]            @relation("ReportAuthor")
+  votes         ReportVote[]
+  comments      ReportComment[]
+  responses     EntityResponse[]
+  ownedEntities Entity[]            @relation("EntityOwner")
+  claims        EntityClaim[]
+  modLogs       ModerationLog[]
+  posts         Post[]              @relation("PostAuthor")
+  watchlists    Watchlist[]
+  alertSubs     AlertSubscription[]
+  alerts        Alert[]
+  apiKeys       ApiKey[]
+  subscriptions Subscription[]
+  handledNotices Notice[]           @relation("NoticeHandler")
+}
+
+// ═════════════ CATALOG ═════════════
+// One Entity table for every kind of crypto thing; type-specific
+// details live in one-to-one profile tables.
+
+model Entity {
+  id         String       @id @default(cuid())
+  type       EntityType
+  status     EntityStatus @default(ACTIVE)
+  slug       String       @unique
+  name       String
+  summary    String?
+  logoUrl    String?
+  country    String?
+  foundedAt  DateTime?
+  tags       String[]
+  verified   Boolean      @default(false) // paid/verified badge, never affects score
+  verifiedAt DateTime?
+  ownerId    String?
+  owner      User?        @relation("EntityOwner", fields: [ownerId], references: [id])
+  mergedIntoId String?
+  mergedInto   Entity?    @relation("EntityMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Entity[]   @relation("EntityMerge")
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  translations EntityTranslation[]
+  aliases      EntityAlias[]
+  links        EntityLink[]
+  addresses    KnownAddress[]
+  coin         Coin?
+  exchange     ExchangeProfile?
+  wallet       WalletProfile?
+  influencer   InfluencerProfile?
+  reports      Report[]
+  responses    EntityResponse[]
+  scores       RiskScore[]
+  riskEvents   RiskEvent[]
+  stats        EntityStats?
+  promotionsReceived Promotion[] @relation("PromotionTarget")
+  claims       EntityClaim[]
+  subscriptions Subscription[]
+  posts        PostEntity[]
+  watchItems   WatchlistItem[]
+  alertSubs    AlertSubscription[]
+  alerts       Alert[]
+  notices      Notice[]
+
+  @@index([type, status])
+  @@index([name])
+}
+
+model EntityTranslation {
+  id       String  @id @default(cuid())
+  entityId String
+  entity   Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  locale   String
+  name     String?
+  summary  String?
+
+  @@unique([entityId, locale])
+}
+
+model EntityAlias {
+  id       String @id @default(cuid())
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  alias    String
+
+  @@index([alias])
+}
+
+// Websites, social accounts, app store pages for any entity
+model EntityLink {
+  id           String   @id @default(cuid())
+  entityId     String
+  entity       Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  kind         LinkKind
+  url          String
+  handle       String?
+  followers    Int?
+  verifiedByUs Boolean  @default(false) // ownership proven (e.g. bio code)
+
+  @@unique([entityId, url])
+  @@index([kind, handle])
+}
+
+model Chain {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  evmChainId  Int?
+  explorerUrl String
+
+  coins     Coin[]
+  addresses KnownAddress[]
+  evidences Evidence[]
+}
+
+model Coin {
+  id              String    @id @default(cuid())
+  entityId        String    @unique
+  entity          Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  chainId         String
+  chain           Chain     @relation(fields: [chainId], references: [id])
+  symbol          String
+  contractAddress String
+  decimals        Int?
+  launchedAt      DateTime?
+  audits          ContractAudit[]
+
+  @@unique([chainId, contractAddress])
+}
+
+model ExchangeProfile {
+  id                  String   @id @default(cuid())
+  entityId            String   @unique
+  entity              Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  custodial           Boolean  @default(true)
+  licensed            Boolean?
+  licenseInfo         String?
+  headquartersCountry String?
+  proofOfReserves     Boolean?
+  restrictedCountries String[]
+  supportedCountries  String[]
+}
+
+model WalletProfile {
+  id               String     @id @default(cuid())
+  entityId         String     @unique
+  entity           Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  kind             WalletKind
+  openSource       Boolean?
+  auditedBy        String?
+  secureElement    Boolean?   // hardware wallets
+  firmwareVersion  String?
+  manufacturerCountry String?
+  supportedChains  String[]
+  officialSellers  String[]   // authorized sales channels (fake device protection)
+  priceUsd         Decimal?   @db.Decimal(10, 2)
+}
+
+// Known on-chain addresses linked to an entity (treasury, deployer, ...)
+model KnownAddress {
+  id       String       @id @default(cuid())
+  entityId String
+  entity   Entity       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  chainId  String
+  chain    Chain        @relation(fields: [chainId], references: [id])
+  address  String
+  label    AddressLabel
+  source   String?
+  createdAt DateTime    @default(now())
+
+  @@unique([chainId, address])
+}
+
+model ContractAudit {
+  id              String   @id @default(cuid())
+  coinId          String
+  coin            Coin     @relation(fields: [coinId], references: [id], onDelete: Cascade)
+  ownerRenounced  Boolean?
+  isHoneypot      Boolean?
+  liquidityLocked Boolean?
+  liquidityUsd    Decimal? @db.Decimal(20, 2)
+  top10HolderPct  Decimal? @db.Decimal(5, 2)
+  buyTaxPct       Decimal? @db.Decimal(5, 2)
+  sellTaxPct      Decimal? @db.Decimal(5, 2)
+  isProxy         Boolean?
+  raw             Json?
+  scannedAt       DateTime @default(now())
+
+  @@index([coinId, scannedAt])
+}
+
+model InfluencerProfile {
+  id       String  @id @default(cuid())
+  entityId String  @unique
+  entity   Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  bio      String?
+  promotions Promotion[]
+}
+
+// One public promotion by an influencer (public posts only)
+model Promotion {
+  id               String   @id @default(cuid())
+  influencerId     String
+  influencer       InfluencerProfile @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  targetEntityId   String
+  target           Entity   @relation("PromotionTarget", fields: [targetEntityId], references: [id])
+  sourceUrl        String
+  platform         LinkKind
+  promotedAt       DateTime
+  disclosedAsAd    Boolean  @default(false)
+  claimedGuarantee Boolean  @default(false)
+  priceAtPromo     Decimal? @db.Decimal(30, 12)
+  priceLatest      Decimal? @db.Decimal(30, 12)
+  maxDrawdownPct   Decimal? @db.Decimal(6, 2)
+  createdAt        DateTime @default(now())
+
+  reports Report[]
+
+  @@unique([influencerId, sourceUrl])
+  @@index([targetEntityId])
+}
+
+// ═════════════ RISK SCORING ═════════════
+// Models are versioned per entity type. Each score stores a per-factor
+// breakdown so it is explainable and publishable as a methodology page.
+
+model RiskModel {
+  id          String     @id @default(cuid())
+  entityType  EntityType
+  version     Int
+  methodology String?    // public methodology text
+  active      Boolean    @default(false)
+  publishedAt DateTime?
+
+  factors RiskFactorDef[]
+  scores  RiskScore[]
+
+  @@unique([entityType, version])
+}
+
+model RiskFactorDef {
+  id          String    @id @default(cuid())
+  modelId     String
+  model       RiskModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  code        String    // e.g. LIQUIDITY_LOCKED, TOP10_HOLDERS, REPORT_RATE
+  name        String
+  description String?
+  weight      Decimal   @db.Decimal(5, 2)
+  maxPoints   Int
+  dataSource  String?   // contract_audit, reports, exchange_profile, manual ...
+
+  values RiskScoreFactor[]
+
+  @@unique([modelId, code])
+}
+
+model RiskScore {
+  id         String    @id @default(cuid())
+  entityId   String
+  entity     Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  modelId    String
+  model      RiskModel @relation(fields: [modelId], references: [id])
+  score      Int       // 0 to 100, higher = riskier
+  level      RiskLevel
+  confidence Int       @default(0) // 0 to 100, how complete the input data was
+  computedAt DateTime  @default(now())
+
+  factors RiskScoreFactor[]
+
+  @@index([entityId, computedAt])
+}
+
+model RiskScoreFactor {
+  id       String        @id @default(cuid())
+  scoreId  String
+  score    RiskScore     @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  factorId String
+  factor   RiskFactorDef @relation(fields: [factorId], references: [id])
+  points   Decimal       @db.Decimal(6, 2)
+  rawValue String?       // what we measured, e.g. "64%"
+  note     String?
+
+  @@unique([scoreId, factorId])
+}
+
+// Time-stamped incidents that feed the score and the alert system
+model RiskEvent {
+  id         String        @id @default(cuid())
+  entityId   String
+  entity     Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  kind       RiskEventKind
+  severity   Int           // 1 to 5
+  description String?
+  sourceUrl  String?
+  txHash     String?
+  occurredAt DateTime
+  detectedAt DateTime      @default(now())
+
+  @@index([entityId, occurredAt])
+}
+
+model EntityStats {
+  id                String   @id @default(cuid())
+  entityId          String   @unique
+  entity            Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  totalReports      Int      @default(0)
+  respondedReports  Int      @default(0)
+  resolvedReports   Int      @default(0)
+  responseRatePct   Decimal  @default(0) @db.Decimal(5, 2)
+  resolutionRatePct Decimal  @default(0) @db.Decimal(5, 2)
+  avgResponseHours  Decimal? @db.Decimal(8, 2)
+  avgSatisfaction   Decimal? @db.Decimal(3, 2)
+  computedAt        DateTime @default(now())
+}
+
+// ═════════════ COMPLAINTS ═════════════
+
+model Report {
+  id          String         @id @default(cuid())
+  entityId    String
+  entity      Entity         @relation(fields: [entityId], references: [id])
+  authorId    String
+  author      User           @relation("ReportAuthor", fields: [authorId], references: [id])
+  promotionId String?
+  promotion   Promotion?     @relation(fields: [promotionId], references: [id])
+  category    ReportCategory
+  title       String
+  body        String
+  locale      String         @default("en")
+  lossUsd     Decimal?       @db.Decimal(20, 2)
+  incidentAt  DateTime?
+  status      ReportStatus   @default(PENDING)
+  createdAt   DateTime       @default(now())
+  publishedAt DateTime?
+  updatedAt   DateTime       @updatedAt
+
+  resolvedAt         DateTime?
+  satisfactionRating Int?
+  satisfactionNote   String?
+
+  evidences Evidence[]
+  votes     ReportVote[]
+  comments  ReportComment[]
+  responses EntityResponse[]
+  modLogs   ModerationLog[]
+  notices   Notice[]
+
+  @@index([entityId, status])
+  @@index([authorId])
+  @@index([status, createdAt])
+}
+
+model Evidence {
+  id              String       @id @default(cuid())
+  reportId        String
+  report          Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  type            EvidenceType
+  value           String?
+  fileUrl         String?
+  chainId         String?
+  chain           Chain?       @relation(fields: [chainId], references: [id])
+  verifiedOnChain Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+
+  @@index([reportId])
+  @@index([value])
+}
+
+model ReportVote {
+  id       String  @id @default(cuid())
+  reportId String
+  report   Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User    @relation(fields: [userId], references: [id])
+  helpful  Boolean @default(true)
+
+  @@unique([reportId, userId])
+}
+
+model ReportComment {
+  id        String   @id @default(cuid())
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  body      String
+  isMeToo   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([reportId, createdAt])
+}
+
+// Right of reply for the reported entity
+model EntityResponse {
+  id        String   @id @default(cuid())
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  entityId  String
+  entity    Entity   @relation(fields: [entityId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  isDispute Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ModerationLog {
+  id          String           @id @default(cuid())
+  reportId    String?
+  report      Report?          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  postId      String?
+  post        Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  moderatorId String
+  moderator   User             @relation(fields: [moderatorId], references: [id])
+  action      ModerationAction
+  reason      String?
+  createdAt   DateTime         @default(now())
+
+  @@index([reportId])
+  @@index([postId])
+}
+
+// ═════════════ LEGAL NOTICES ═════════════
+// Takedown, correction, court order and privacy requests, tracked with
+// deadlines and decisions (intermediary-liability process).
+
+model Notice {
+  id             String       @id @default(cuid())
+  type           NoticeType
+  status         NoticeStatus @default(RECEIVED)
+  reportId       String?
+  report         Report?      @relation(fields: [reportId], references: [id])
+  postId         String?
+  post           Post?        @relation(fields: [postId], references: [id])
+  entityId       String?
+  entity         Entity?      @relation(fields: [entityId], references: [id])
+  submitterName  String
+  submitterEmail String
+  claim          String
+  legalBasis     String?
+  courtOrderRef  String?
+  receivedAt     DateTime     @default(now())
+  dueAt          DateTime?
+  decidedAt      DateTime?
+  decision       String?
+  handlerId      String?
+  handler        User?        @relation("NoticeHandler", fields: [handlerId], references: [id])
+
+  @@index([status, dueAt])
+}
+
+// ═════════════ CONTENT: BLOG AND NEWS ═════════════
+
+model Post {
+  id           String     @id @default(cuid())
+  type         PostType
+  status       PostStatus @default(DRAFT)
+  authorId     String
+  author       User       @relation("PostAuthor", fields: [authorId], references: [id])
+  categoryId   String?
+  category     PostCategory? @relation(fields: [categoryId], references: [id])
+  coverUrl     String?
+  sourceName   String?    // news: original publisher
+  sourceUrl    String?    // news: link to the original
+  isSponsored  Boolean    @default(false)
+  scheduledAt  DateTime?
+  publishedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  translations PostTranslation[]
+  tags         PostTag[]
+  entities     PostEntity[]
+  modLogs      ModerationLog[]
+  notices      Notice[]
+  newsItem     NewsItem?
+
+  @@index([type, status, publishedAt])
+}
+
+model PostTranslation {
+  id              String @id @default(cuid())
+  postId          String
+  post            Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  locale          String
+  slug            String
+  title           String
+  excerpt         String?
+  body            String
+  metaTitle       String?
+  metaDescription String?
+
+  @@unique([postId, locale])
+  @@unique([locale, slug])
+}
+
+model PostCategory {
+  id    String @id @default(cuid())
+  slug  String @unique
+  name  String
+  posts Post[]
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  slug  String    @unique
+  name  String
+  posts PostTag[]
+}
+
+model PostTag {
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+// Links a post to the entities it is about (powers "latest news" on entity pages)
+model PostEntity {
+  postId   String
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  entityId String
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@id([postId, entityId])
+}
+
+// News aggregation: headline and link only, own summary written by editors
+model NewsSource {
+  id            String    @id @default(cuid())
+  name          String
+  feedUrl       String    @unique
+  language      String?
+  country       String?
+  active        Boolean   @default(true)
+  lastFetchedAt DateTime?
+
+  items NewsItem[]
+}
+
+model NewsItem {
+  id         String     @id @default(cuid())
+  sourceId   String
+  source     NewsSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  title      String
+  url        String     @unique
+  publishedAt DateTime?
+  fetchedAt  DateTime   @default(now())
+  postId     String?    @unique // set when an editor turns it into a Post
+  post       Post?      @relation(fields: [postId], references: [id])
+
+  @@index([sourceId, publishedAt])
+}
+
+// ═════════════ ENGAGEMENT ═════════════
+
+model Watchlist {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+
+  items WatchlistItem[]
+}
+
+model WatchlistItem {
+  watchlistId String
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  entityId    String
+  entity      Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  addedAt     DateTime  @default(now())
+
+  @@id([watchlistId, entityId])
+}
+
+// User settings: which alerts, where to send
+model AlertSubscription {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityId       String?      // null = all watchlist items
+  entity         Entity?      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  kinds          AlertKind[]
+  channel        AlertChannel
+  telegramChatId String?
+  active         Boolean      @default(true)
+}
+
+// Sent alerts (log)
+model Alert {
+  id       String       @id @default(cuid())
+  userId   String
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityId String?
+  entity   Entity?      @relation(fields: [entityId], references: [id])
+  kind     AlertKind
+  channel  AlertChannel
+  payload  Json?
+  createdAt DateTime    @default(now())
+  sentAt   DateTime?
+
+  @@index([userId, createdAt])
+}
+
+// ═════════════ MONETIZATION ═════════════
+// Brand panels, API access, premium user features.
+// Plans never change scores or hide reports.
+
+model Plan {
+  id                String       @id @default(cuid())
+  code              String       @unique
+  name              String
+  audience          PlanAudience
+  priceMonthlyUsd   Decimal      @db.Decimal(10, 2)
+  features          Json?
+  active            Boolean      @default(true)
+
+  subscriptions Subscription[]
+  apiKeys       ApiKey[]
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  planId      String
+  plan        Plan               @relation(fields: [planId], references: [id])
+  userId      String
+  user        User               @relation(fields: [userId], references: [id])
+  entityId    String?            // set for brand/entity plans
+  entity      Entity?            @relation(fields: [entityId], references: [id])
+  status      SubscriptionStatus @default(ACTIVE)
+  startedAt   DateTime           @default(now())
+  renewsAt    DateTime?
+  canceledAt  DateTime?
+  providerRef String?
+
+  @@index([userId, status])
+}
+
+model EntityClaim {
+  id         String      @id @default(cuid())
+  entityId   String
+  entity     Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  status     ClaimStatus @default(PENDING)
+  proofType  String      // domain_txt, official_email, social_bio_code ...
+  proofValue String?
+  createdAt  DateTime    @default(now())
+  reviewedAt DateTime?
+
+  @@index([entityId, status])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId     String?
+  plan       Plan?     @relation(fields: [planId], references: [id])
+  name       String
+  keyHash    String    @unique
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  usage ApiUsageDaily[]
+}
+
+model ApiUsageDaily {
+  apiKeyId String
+  apiKey   ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  day      DateTime @db.Date
+  requests Int      @default(0)
+
+  @@id([apiKeyId, day])
+}
