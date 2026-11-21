@@ -5,6 +5,7 @@ build/
 out/
 coverage/
 .env
+.env.local
 .env.*.local
 *.log
 *.tsbuildinfo
