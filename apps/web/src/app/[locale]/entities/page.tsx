@@ -18,10 +18,13 @@ export async function generateMetadata({ params }: PageProps<'/[locale]/entities
   });
 }
 
-async function searchEntities(q: string): Promise<ApiEntity[]> {
-  const query = q ? `?q=${encodeURIComponent(q)}` : '';
+async function searchEntities(q: string, type: string): Promise<ApiEntity[]> {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (type) params.set('type', type);
+  const query = params.toString();
   try {
-    return await apiFetch<ApiEntity[]>(`/entities${query}`, { next: { revalidate: 600 } });
+    return await apiFetch<ApiEntity[]>(`/entities${query ? `?${query}` : ''}`, { next: { revalidate: 600 } });
   } catch {
     return [];
   }
@@ -31,13 +34,15 @@ export default async function EntitiesPage({ params, searchParams }: PageProps<'
   const { locale } = (await params) as { locale: Locale };
   const resolvedSearchParams = await searchParams;
   const q = typeof resolvedSearchParams.q === 'string' ? resolvedSearchParams.q : '';
+  const type = typeof resolvedSearchParams.type === 'string' ? resolvedSearchParams.type : '';
   const dictionary = getDictionary(locale);
-  const entities = await searchEntities(q);
+  const entities = await searchEntities(q, type);
 
   return (
     <div className="container stack" style={{ paddingTop: 32, paddingBottom: 48 }}>
       <h1>{dictionary.entities.title}</h1>
       <form action={`/${locale}/entities`} className="row">
+        {type ? <input type="hidden" name="type" value={type} /> : null}
         <input
           className="input"
           type="text"

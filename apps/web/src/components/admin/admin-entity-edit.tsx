@@ -5,7 +5,7 @@ import { apiFetch, ApiError } from '../../lib/api-client';
 import { useAuth } from '../../lib/auth-context';
 import type { ApiEntity, ApiEntityLink, EntityType, LinkKind } from '../../lib/api-models';
 import { RequireRole } from './require-role';
-import { ENTITY_TYPES } from './admin-entities-panel';
+import { ENTITY_TYPES } from '../../lib/entity-types';
 import { humanizeEnum } from '../../lib/format';
 import type { Dictionary } from '../../dictionaries/types';
 import type { Locale } from '../../lib/locale';

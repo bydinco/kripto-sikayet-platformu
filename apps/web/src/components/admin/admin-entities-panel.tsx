@@ -6,24 +6,9 @@ import { apiFetch, ApiError } from '../../lib/api-client';
 import type { ApiEntity, EntityType } from '../../lib/api-models';
 import { RequireRole } from './require-role';
 import { humanizeEnum, slugify } from '../../lib/format';
+import { ENTITY_TYPES } from '../../lib/entity-types';
 import type { Dictionary } from '../../dictionaries/types';
 import type { Locale } from '../../lib/locale';
-
-export const ENTITY_TYPES: EntityType[] = [
-  'COIN',
-  'EXCHANGE',
-  'DEX',
-  'WALLET',
-  'DEFI_PROTOCOL',
-  'NFT_PROJECT',
-  'LAUNCHPAD',
-  'INFLUENCER',
-  'SIGNAL_GROUP',
-  'INVESTMENT_PLATFORM',
-  'MINING_PLATFORM',
-  'AIRDROP',
-  'OTHER',
-];
 
 function CreateForm({
   accessToken,

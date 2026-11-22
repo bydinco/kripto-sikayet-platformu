@@ -271,6 +271,8 @@ export interface ApiRiskScore {
   computedAt: string;
   factors: ApiRiskScoreFactor[];
   model: ApiRiskModel;
+  // Present only on GET /scoring/top.
+  entity?: { id: string; name: string; slug: string; type: EntityType };
 }
 
 export interface ApiEvidence {
