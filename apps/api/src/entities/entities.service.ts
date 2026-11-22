@@ -76,7 +76,7 @@ export class EntitiesService {
   }
 
   async update(id: string, updateEntityDto: UpdateEntityDto, currentUser: JwtPayload) {
-    const { verified, ...rest } = updateEntityDto;
+    const { verified, coingeckoId, ...rest } = updateEntityDto;
     if (verified !== undefined && currentUser.role !== Role.ADMIN) {
       throw new ForbiddenException('Doğrulanmış rozeti sadece ADMIN değiştirebilir.');
     }
@@ -88,10 +88,21 @@ export class EntitiesService {
     }
 
     try {
-      return await this.prisma.entity.update({ where: { id }, data });
+      await this.prisma.entity.update({ where: { id }, data });
     } catch (error) {
       throw this.mapKnownError(error);
     }
+
+    if (coingeckoId !== undefined) {
+      // updateMany (not update) on purpose: a non-COIN entity, or a COIN
+      // entity whose Coin profile doesn't exist yet (there is still no API
+      // to create one — see recordContractAudit above), simply has no row
+      // to touch. Silently no-ops rather than erroring, since the admin
+      // form may submit this field regardless of the entity's type.
+      await this.prisma.coin.updateMany({ where: { entityId: id }, data: { coingeckoId: coingeckoId || null } });
+    }
+
+    return this.findOne(id);
   }
 
   remove(id: string) {

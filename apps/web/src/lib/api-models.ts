@@ -143,7 +143,24 @@ export interface ApiCoin {
   symbol: string;
   contractAddress: string;
   chainId: string;
+  coingeckoId: string | null;
   audits: ApiContractAudit[];
+}
+
+// GET /market/prices and GET /market/prices/:entitySlug. Never fed into
+// the risk score — informational only (see CLAUDE.md "Piyasa fiyat
+// verisi"). id/symbol are null only from the single-entity endpoint when
+// nothing matches (unknown slug, non-COIN, no coingeckoId) — that endpoint
+// always answers 200, never 404.
+export interface ApiMarketPrice {
+  id: string | null;
+  slug: string;
+  symbol: string | null;
+  price: number | null;
+  change24h: number | null;
+  marketCap: number | null;
+  updatedAt: string | null;
+  stale: boolean;
 }
 
 export interface ApiEntity {

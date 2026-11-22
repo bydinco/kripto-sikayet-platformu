@@ -194,6 +194,47 @@ describe('Entities catalog panel (e2e)', () => {
     expect(audit).not.toHaveProperty('raw');
   });
 
+  it('PATCH /entities/:id with coingeckoId updates the Coin row when one exists', async () => {
+    const prisma = app.get(PrismaService);
+    const chain = await prisma.chain.upsert({
+      where: { slug: 'test-chain-entities-coingecko' },
+      update: {},
+      create: { slug: 'test-chain-entities-coingecko', name: 'Test Chain', explorerUrl: 'https://example.com' },
+    });
+    const entity = await prisma.entity.create({
+      data: { type: 'COIN', slug: `coin-coingecko-${Date.now()}`, name: 'Coingecko Check Coin' },
+    });
+    entityIds.push(entity.id);
+    await prisma.coin.create({
+      data: { entityId: entity.id, chainId: chain.id, symbol: 'CGC', contractAddress: `0xcgc${entity.id}` },
+    });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/entities/${entity.id}`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .send({ coingeckoId: 'bitcoin' })
+      .expect(200);
+    expect(res.body.coin.coingeckoId).toBe('bitcoin');
+
+    // Empty string clears it.
+    const cleared = await request(app.getHttpServer())
+      .patch(`/entities/${entity.id}`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .send({ coingeckoId: '' })
+      .expect(200);
+    expect(cleared.body.coin.coingeckoId).toBeNull();
+  });
+
+  it('PATCH /entities/:id with coingeckoId silently no-ops when the entity has no Coin profile', async () => {
+    const entityId = await createEntity(editor.accessToken, 'coingecko-nocoin');
+    const res = await request(app.getHttpServer())
+      .patch(`/entities/${entityId}`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .send({ coingeckoId: 'bitcoin' })
+      .expect(200);
+    expect(res.body.coin).toBeNull();
+  });
+
   it('404s deleting a link that does not belong to the given entity', async () => {
     const entityIdA = await createEntity(editor.accessToken, 'linkcross-a');
     const entityIdB = await createEntity(editor.accessToken, 'linkcross-b');
