@@ -507,7 +507,9 @@ model RiskScore {
   entity     Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
   modelId    String
   model      RiskModel @relation(fields: [modelId], references: [id])
-  score      Int       // 0 to 100, higher = riskier
+  // Null when level is INSUFFICIENT_DATA: confidence was too low to publish
+  // a number at all, not just to display one.
+  score      Int?      // 0 to 100, higher = riskier
   level      RiskLevel
   confidence Int       @default(0) // 0 to 100, how complete the input data was
   computedAt DateTime  @default(now())
