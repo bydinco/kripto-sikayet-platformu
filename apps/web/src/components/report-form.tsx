@@ -19,6 +19,11 @@ interface EvidenceRow {
   value: string;
 }
 
+interface SubmitError {
+  message: string;
+  existingReportId?: string;
+}
+
 const EVIDENCE_TYPES: FormEvidenceType[] = ['TX_HASH', 'WALLET_ADDRESS', 'LINK'];
 
 function isHttpUrl(value: string): boolean {
@@ -43,8 +48,9 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
   const [lossUsd, setLossUsd] = useState('');
   const [incidentAt, setIncidentAt] = useState('');
   const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[]>([]);
+  const [consent, setConsent] = useState(false);
 
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SubmitError | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [createdReport, setCreatedReport] = useState<ApiReport | null>(null);
 
@@ -56,8 +62,8 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
   }, [entityQuery, status]);
 
   const canSubmit = useMemo(
-    () => Boolean(selectedEntity) && title.trim().length > 0 && body.trim().length > 0,
-    [selectedEntity, title, body],
+    () => Boolean(selectedEntity) && title.trim().length > 0 && body.trim().length > 0 && consent,
+    [selectedEntity, title, body, consent],
   );
 
   function addEvidenceRow() {
@@ -80,7 +86,7 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
 
     for (const row of evidenceRows) {
       if (row.type === 'LINK' && row.value && !isHttpUrl(row.value)) {
-        setError(`${dictionary.evidenceTypes.LINK}: http(s):// ${row.value}`);
+        setError({ message: `${dictionary.evidenceTypes.LINK}: http(s):// ${row.value}` });
         return;
       }
     }
@@ -111,7 +117,13 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
 
       setCreatedReport(report);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
+      if (err instanceof ApiError && err.status === 409 && err.body?.existingReportId) {
+        setError({ message: dictionary.reportForm.duplicateError, existingReportId: err.body.existingReportId });
+      } else if (err instanceof ApiError && err.status === 429) {
+        setError({ message: dictionary.reportForm.rateLimitError });
+      } else {
+        setError({ message: err instanceof ApiError ? err.message : String(err) });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -145,102 +157,109 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
     <form onSubmit={handleSubmit} className="stack">
       <h1>{dictionary.reportForm.title}</h1>
 
-      <div className="field">
-        <label htmlFor="entity-search">{dictionary.reportForm.entityLabel}</label>
-        <input
-          id="entity-search"
-          className="input"
-          type="text"
-          value={selectedEntity ? selectedEntity.name : entityQuery}
-          onChange={(e) => {
-            setSelectedEntity(null);
-            setEntityQuery(e.target.value);
-          }}
-          placeholder={dictionary.reportForm.entitySearchPlaceholder}
-        />
-        {!selectedEntity && entityQuery && entities.length > 0 ? (
-          <div className="card" style={{ padding: 0 }}>
-            {entities.slice(0, 8).map((entity) => (
-              <button
-                key={entity.id}
-                type="button"
-                className="button button-secondary"
-                style={{ display: 'block', width: '100%', border: 'none', textAlign: 'left' }}
-                onClick={() => {
-                  setSelectedEntity(entity);
-                  setEntityQuery('');
-                }}
-              >
-                {entity.name} <span className="muted">· {humanizeEnum(entity.type)}</span>
-              </button>
+      <div className="card stack">
+        <h2>{dictionary.reportForm.step1Title}</h2>
+        <div className="field">
+          <label htmlFor="entity-search">{dictionary.reportForm.entityLabel}</label>
+          <input
+            id="entity-search"
+            className="input"
+            type="text"
+            value={selectedEntity ? selectedEntity.name : entityQuery}
+            onChange={(e) => {
+              setSelectedEntity(null);
+              setEntityQuery(e.target.value);
+            }}
+            placeholder={dictionary.reportForm.entitySearchPlaceholder}
+          />
+          {!selectedEntity && entityQuery && entities.length > 0 ? (
+            <div className="card" style={{ padding: 0 }}>
+              {entities.slice(0, 8).map((entity) => (
+                <button
+                  key={entity.id}
+                  type="button"
+                  className="button button-secondary"
+                  style={{ display: 'block', width: '100%', border: 'none', textAlign: 'left' }}
+                  onClick={() => {
+                    setSelectedEntity(entity);
+                    setEntityQuery('');
+                  }}
+                >
+                  {entity.name} <span className="muted">· {humanizeEnum(entity.type)}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!selectedEntity ? <p className="muted">{dictionary.reportForm.noEntitySelected}</p> : null}
+        </div>
+      </div>
+
+      <div className="card stack">
+        <h2>{dictionary.reportForm.step2Title}</h2>
+        <div className="field">
+          <label htmlFor="category">{dictionary.reportForm.categoryLabel}</label>
+          <select
+            id="category"
+            className="select"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as ReportCategory)}
+          >
+            {Object.entries(dictionary.categories).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <label htmlFor="title">{dictionary.reportForm.titleLabel}</label>
+          <input id="title" className="input" type="text" required value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label htmlFor="body">{dictionary.reportForm.bodyLabel}</label>
+          <textarea
+            id="body"
+            className="textarea"
+            required
+            rows={6}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+        </div>
+
+        <div className="row">
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="loss">{dictionary.reportForm.lossLabel}</label>
+            <input
+              id="loss"
+              className="input"
+              type="number"
+              min="0"
+              step="0.01"
+              value={lossUsd}
+              onChange={(e) => setLossUsd(e.target.value)}
+            />
           </div>
-        ) : null}
-        {!selectedEntity ? <p className="muted">{dictionary.reportForm.noEntitySelected}</p> : null}
-      </div>
-
-      <div className="field">
-        <label htmlFor="category">{dictionary.reportForm.categoryLabel}</label>
-        <select
-          id="category"
-          className="select"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as ReportCategory)}
-        >
-          {Object.entries(dictionary.categories).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="title">{dictionary.reportForm.titleLabel}</label>
-        <input id="title" className="input" type="text" required value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-
-      <div className="field">
-        <label htmlFor="body">{dictionary.reportForm.bodyLabel}</label>
-        <textarea
-          id="body"
-          className="textarea"
-          required
-          rows={6}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-        />
-      </div>
-
-      <div className="row">
-        <div className="field" style={{ flex: 1 }}>
-          <label htmlFor="loss">{dictionary.reportForm.lossLabel}</label>
-          <input
-            id="loss"
-            className="input"
-            type="number"
-            min="0"
-            step="0.01"
-            value={lossUsd}
-            onChange={(e) => setLossUsd(e.target.value)}
-          />
-        </div>
-        <div className="field" style={{ flex: 1 }}>
-          <label htmlFor="incidentAt">{dictionary.reportForm.incidentDateLabel}</label>
-          <input
-            id="incidentAt"
-            className="input"
-            type="date"
-            value={incidentAt}
-            onChange={(e) => setIncidentAt(e.target.value)}
-          />
+          <div className="field" style={{ flex: 1 }}>
+            <label htmlFor="incidentAt">{dictionary.reportForm.incidentDateLabel}</label>
+            <input
+              id="incidentAt"
+              className="input"
+              type="date"
+              value={incidentAt}
+              onChange={(e) => setIncidentAt(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="stack">
-        <h2>{dictionary.reportForm.evidenceTitle}</h2>
+      <div className="card stack">
+        <h2>{dictionary.reportForm.step3Title}</h2>
+        <p className="muted" style={{ fontSize: '0.8125rem' }}>{dictionary.reportForm.fileUploadComingSoon}</p>
         {evidenceRows.map((row) => (
-          <div key={row.key} className="row card">
+          <div key={row.key} className="row" style={{ background: 'var(--s2)', padding: 12, borderRadius: 8 }}>
             <select
               className="select"
               style={{ maxWidth: 200 }}
@@ -254,7 +273,7 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
               ))}
             </select>
             <input
-              className="input"
+              className={`input${row.type !== 'LINK' ? ' mono' : ''}`}
               type="text"
               placeholder={dictionary.reportForm.evidenceValueLabel}
               value={row.value}
@@ -270,7 +289,22 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
         </button>
       </div>
 
-      {error ? <p className="error-text">{error}</p> : null}
+      <label className="row" style={{ cursor: 'pointer' }}>
+        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required />
+        {dictionary.reportForm.consentLabel}
+      </label>
+
+      {error ? (
+        <p className="error-text">
+          {error.message}
+          {error.existingReportId ? (
+            <>
+              {' '}
+              <Link href={`/${locale}/reports/${error.existingReportId}`}>{dictionary.reportForm.viewReport}</Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
 
       <button type="submit" className="button" disabled={!canSubmit || submitting}>
         {submitting ? dictionary.reportForm.submitting : dictionary.reportForm.submit}
