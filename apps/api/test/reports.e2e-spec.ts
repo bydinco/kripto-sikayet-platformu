@@ -151,8 +151,12 @@ describe('Reports (e2e)', () => {
   });
 
   it('only lists PUBLISHED reports publicly', async () => {
+    // Scoped to entityId: an unfiltered GET /reports also legitimately
+    // returns other entities' DISPUTED/RESOLVED reports (also public), so
+    // asserting "every result is PUBLISHED" is only sound within a set this
+    // test fully controls.
     const prisma = app.get(PrismaService);
-    await prisma.report.create({
+    const hidden = await prisma.report.create({
       data: { entityId, authorId: author.userId, category: 'RUG_PULL', title: 'hidden', body: 'b' },
     });
     const published = await prisma.report.create({
@@ -166,9 +170,10 @@ describe('Reports (e2e)', () => {
       },
     });
 
-    const res = await request(app.getHttpServer()).get('/reports').expect(200);
+    const res = await request(app.getHttpServer()).get(`/reports?entityId=${entityId}`).expect(200);
     const ids = res.body.map((r: { id: string }) => r.id);
     expect(ids).toContain(published.id);
+    expect(ids).not.toContain(hidden.id);
     expect(res.body.every((r: { status: string }) => r.status === 'PUBLISHED')).toBe(true);
   });
 });

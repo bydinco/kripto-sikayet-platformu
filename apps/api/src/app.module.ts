@@ -22,6 +22,11 @@ import { ResponsesModule } from './responses/responses.module.js';
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: envValidationSchema,
+      // e2e tests (NODE_ENV=test) load their own env file, pointed at the
+      // dedicated test database — never the dev .env. See
+      // test/global-setup.e2e.ts, which sets NODE_ENV=test before any test
+      // file (and therefore this module) is evaluated.
+      envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
     }),
     ThrottlerModule.forRoot({
       throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }],

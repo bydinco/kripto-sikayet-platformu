@@ -38,6 +38,22 @@ pnpm prisma:migrate
 Host portları (5434/6380/3001/3002) bu makinedeki diğer projelerle
 çakışmaması için varsayılanlardan kaydırıldı; `.env` ile değiştirilebilir.
 
+## e2e testleri — ayrı test veritabanı
+
+`pnpm --filter api test:e2e` **asla** dev DB'ye (5434) dokunmaz. Önce
+`docker compose up -d postgres_test` (port 5435, db `kripto_sikayet_test`),
+sonra `apps/api/.env.test`'teki `DATABASE_URL` kullanılır
+(`apps/api/src/app.module.ts`, `NODE_ENV=test` iken `.env.test` yükler).
+`apps/api/test/global-setup.e2e.ts` her çalıştırmada: (1) `DATABASE_URL`
+hem "_test" içermeli hem 5435 portunda olmalı yoksa hata verir
+(`test/reset-test-db.ts`'teki `assertTestDatabaseUrl`, kendi unit testi
+var), (2) `prisma migrate deploy` (yıkıcı değil, şemayı günceller), (3)
+tüm tabloları `TRUNCATE ... RESTART IDENTITY CASCADE` ile boşaltır. **Asla
+`prisma migrate reset` veya `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`
+kullanılmaz** — Prisma'nın kendi AI-ajan güvenlik kontrolü `migrate
+reset`i engeller, kullanıcı bunun yerine truncate'i tercih etti. 16 dosya
+`fileParallelism: false` ile sırayla çalışır (paylaşılan tek test DB'si).
+
 ## Değişmez kurallar
 
 - Sistem hiçbir yerde otomatik "scam/dolandırıcı" demez. Risk seviyeleri

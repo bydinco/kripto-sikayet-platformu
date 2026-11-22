@@ -29,6 +29,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # Dedicated e2e test database — never the dev DB. apps/api's e2e suite
+  # resets this schema on every run (see apps/api/test/global-setup.e2e.ts),
+  # which would be destructive against the dev database above.
+  postgres_test:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-kripto_sikayet_test}
+    ports:
+      - "${HOST_POSTGRES_TEST_PORT:-5435}:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres_data:
+  postgres_test_data:
   redis_data:
