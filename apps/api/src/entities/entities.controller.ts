@@ -4,8 +4,11 @@ import { Role } from '@prisma/client';
 import { EntitiesService } from './entities.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
 import { UpdateEntityDto } from './dto/update-entity.dto.js';
+import { CreateEntityLinkDto } from './dto/create-entity-link.dto.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
 @ApiTags('entities')
 @Controller('entities')
@@ -34,13 +37,29 @@ export class EntitiesController {
 
   @Roles(Role.ADMIN, Role.EDITOR)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateEntityDto: UpdateEntityDto) {
-    return this.entitiesService.update(id, updateEntityDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateEntityDto: UpdateEntityDto,
+    @CurrentUser() currentUser: JwtPayload,
+  ) {
+    return this.entitiesService.update(id, updateEntityDto, currentUser);
   }
 
   @Roles(Role.ADMIN, Role.EDITOR)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.entitiesService.remove(id);
+  }
+
+  @Roles(Role.ADMIN, Role.EDITOR)
+  @Post(':id/links')
+  addLink(@Param('id') id: string, @Body() dto: CreateEntityLinkDto) {
+    return this.entitiesService.addLink(id, dto);
+  }
+
+  @Roles(Role.ADMIN, Role.EDITOR)
+  @Delete(':id/links/:linkId')
+  removeLink(@Param('id') id: string, @Param('linkId') linkId: string) {
+    return this.entitiesService.removeLink(id, linkId);
   }
 }
