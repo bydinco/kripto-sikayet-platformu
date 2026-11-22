@@ -1,14 +1,23 @@
 :root {
-  --bg: #f7f7f5;
-  --card-bg: #ffffff;
-  --border: #e3e3de;
-  --radius: 12px;
-  --text: #16181d;
-  --text-muted: #5b5f68;
-  --accent: #2f3742;
-  --accent-contrast: #ffffff;
-  --badge-bg: #eceae4;
-  --max-width: 960px;
+  --bg: #0a0f13;
+  --s1: #111920;
+  --s2: #17212a;
+  --ln: #24323d;
+  --tx: #e8eef2;
+  --mu: #93a4b0;
+  --ac: #7be0ee; /* buton/link/focus dışında kullanılmaz */
+  --amb: #f3b95f;
+  --cor: #f28b7a;
+  --grn: #6fd6a0;
+  --pill-ok-bg: #10301f;
+  --pill-wa-bg: #33270f;
+  --pill-co-bg: #3a1d19;
+  --pill-ac-bg: #0a2a30;
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
+  --max-width: 1040px;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 * {
@@ -31,21 +40,57 @@ body {
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  color: var(--text);
+  color: var(--tx);
   background: var(--bg);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
 }
 
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 a {
-  color: inherit;
+  color: var(--ac);
   text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Chrome (nav links, status pills, etc.) stays neutral — --ac is reserved
+   for genuine buttons/links/focus, never ambient decoration. */
+.site-nav a,
+.site-footer a {
+  color: var(--tx);
 }
 
 main {
   flex: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .container {
@@ -56,9 +101,9 @@ main {
 }
 
 .card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--s1);
+  border: 1px solid var(--ln);
+  border-radius: var(--radius-card);
   padding: 20px;
 }
 
@@ -80,19 +125,84 @@ main {
 }
 
 .muted {
-  color: var(--text-muted);
+  color: var(--mu);
 }
 
+.numeric {
+  font-family: var(--font-heading), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 700;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* Neutral badge — used across admin and the public report-status label.
+   Every status uses the same neutral styling on purpose: color-coding
+   "bad" vs "good" would itself be an accusatory signal this product
+   avoids. Risk levels use .pill instead (see below). */
 .badge {
   display: inline-block;
-  background: var(--badge-bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  background: var(--s2);
+  color: var(--tx);
+  border: 1px solid var(--ln);
+  border-radius: var(--radius-pill);
   padding: 2px 10px;
   font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.pill-ok {
+  background: var(--pill-ok-bg);
+  color: var(--grn);
+}
+
+.pill-wa {
+  background: var(--pill-wa-bg);
+  color: var(--amb);
+}
+
+.pill-co {
+  background: var(--pill-co-bg);
+  color: var(--cor);
+}
+
+.pill-ac {
+  background: var(--pill-ac-bg);
+  color: var(--ac);
+}
+
+.pill-ne {
+  background: var(--s2);
+  color: var(--mu);
+  border-color: var(--ln);
+}
+
+.risk-meter {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+}
+
+.risk-meter-segment {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--ln);
 }
 
 .button {
@@ -100,38 +210,43 @@ main {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
+  background: var(--ac);
+  color: var(--bg);
+  border: 1px solid var(--ac);
+  border-radius: var(--radius-control);
   padding: 10px 18px;
   font-size: 0.9375rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .button-secondary {
   background: transparent;
-  color: var(--text);
-  border-color: var(--border);
+  color: var(--tx);
+  border-color: var(--ln);
 }
 
 .input,
 .select,
 .textarea {
   width: 100%;
-  background: var(--card-bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--s2);
+  color: var(--tx);
+  border: 1px solid var(--ln);
+  border-radius: var(--radius-control);
   padding: 10px 12px;
   font-size: 0.9375rem;
   font-family: inherit;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--mu);
 }
 
 .field {
@@ -146,13 +261,13 @@ main {
 }
 
 .error-text {
-  color: #8a2f2f;
+  color: var(--cor);
   font-size: 0.875rem;
 }
 
 .site-header {
-  border-bottom: 1px solid var(--border);
-  background: var(--card-bg);
+  border-bottom: 1px solid var(--ln);
+  background: var(--s1);
 }
 
 .site-header-inner {
@@ -171,7 +286,24 @@ main {
 }
 
 .site-footer {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--ln);
   padding: 24px 0;
   margin-top: 32px;
+  color: var(--mu);
+  font-size: 0.875rem;
+}
+
+/* Two-column layouts (entity page, report detail): single column below
+   860px per the a11y/layout requirement. */
+.layout-two-col {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .layout-two-col {
+    grid-template-columns: 1fr;
+  }
 }
