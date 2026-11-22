@@ -7,6 +7,8 @@ import { CreateNoticeDto } from './dto/create-notice.dto.js';
 import { UpdateNoticeDto } from './dto/update-notice.dto.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
 const NOTICE_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
@@ -38,8 +40,12 @@ export class NoticesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateNoticeDto: UpdateNoticeDto) {
-    return this.noticesService.update(id, updateNoticeDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateNoticeDto: UpdateNoticeDto,
+    @CurrentUser() currentUser: JwtPayload,
+  ) {
+    return this.noticesService.update(id, updateNoticeDto, currentUser);
   }
 
   @Delete(':id')

@@ -71,4 +71,28 @@ describe('Notices (e2e)', () => {
       .set('Authorization', `Bearer ${moderator.accessToken}`)
       .expect(200);
   });
+
+  it('lets a moderator decide a notice, stamping decidedAt and handlerId', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/notices/${noticeId}`)
+      .set('Authorization', `Bearer ${moderator.accessToken}`)
+      .send({ status: 'ACCEPTED', decision: 'Reviewed, content removed.' })
+      .expect(200);
+
+    expect(res.body.status).toBe('ACCEPTED');
+    expect(res.body.decision).toBe('Reviewed, content removed.');
+    expect(res.body.handlerId).toBe(moderator.userId);
+    expect(res.body.decidedAt).not.toBeNull();
+  });
+
+  it('does not stamp decidedAt for a non-terminal status (UNDER_REVIEW)', async () => {
+    const res = await request(app.getHttpServer())
+      .patch(`/notices/${noticeId}`)
+      .set('Authorization', `Bearer ${moderator.accessToken}`)
+      .send({ status: 'UNDER_REVIEW' })
+      .expect(200);
+
+    expect(res.body.status).toBe('UNDER_REVIEW');
+    expect(res.body.decidedAt).toBeNull();
+  });
 });
