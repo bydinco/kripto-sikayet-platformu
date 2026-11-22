@@ -24,11 +24,11 @@ export class EntitiesController {
 
   @Public()
   @Get()
-  findAll(@Query('q') q?: string, @Query('type') type?: string) {
+  findAll(@Query('q') q?: string, @Query('type') type?: string, @Query('take') take?: string) {
     if (type && !Object.values(EntityType).includes(type as EntityType)) {
       throw new BadRequestException(`Geçersiz tür: ${type}`);
     }
-    return this.entitiesService.findAll(q, type as EntityType | undefined);
+    return this.entitiesService.findAll(q, type as EntityType | undefined, take ? Number(take) : undefined);
   }
 
   @Public()

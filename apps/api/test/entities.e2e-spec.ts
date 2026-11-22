@@ -139,6 +139,61 @@ describe('Entities catalog panel (e2e)', () => {
     await request(app.getHttpServer()).get('/entities?type=NOT_A_TYPE').expect(400);
   });
 
+  it('excludes MERGED entities from the public list, but still resolves them directly by id', async () => {
+    const prisma = app.get(PrismaService);
+    const target = await prisma.entity.create({
+      data: { type: 'COIN', slug: `coin-mergetarget-${Date.now()}`, name: 'Merge Target' },
+    });
+    const merged = await prisma.entity.create({
+      data: {
+        type: 'COIN',
+        slug: `coin-merged-${Date.now()}`,
+        name: 'Merged Away Coin',
+        status: 'MERGED',
+        mergedIntoId: target.id,
+      },
+    });
+    entityIds.push(target.id, merged.id);
+
+    const list = await request(app.getHttpServer())
+      .get(`/entities?q=${encodeURIComponent('Merged Away Coin')}`)
+      .expect(200);
+    expect(list.body.map((e: { id: string }) => e.id)).not.toContain(merged.id);
+
+    // Direct navigation by id still resolves it (e.g. an old bookmarked link).
+    await request(app.getHttpServer()).get(`/entities/${merged.id}`).expect(200);
+  });
+
+  it('enforces a pagination cap on GET /entities regardless of the requested take', async () => {
+    const res = await request(app.getHttpServer()).get('/entities?take=100000').expect(200);
+    expect(res.body.length).toBeLessThanOrEqual(50);
+  });
+
+  it('never returns ContractAudit.raw (arbitrary third-party payload) on the public entity detail', async () => {
+    const prisma = app.get(PrismaService);
+    const chain = await prisma.chain.upsert({
+      where: { slug: 'test-chain-entities-audit' },
+      update: {},
+      create: { slug: 'test-chain-entities-audit', name: 'Test Chain', explorerUrl: 'https://example.com' },
+    });
+    const entity = await prisma.entity.create({
+      data: { type: 'COIN', slug: `coin-rawcheck-${Date.now()}`, name: 'Raw Check Coin' },
+    });
+    entityIds.push(entity.id);
+    const coin = await prisma.coin.create({
+      data: { entityId: entity.id, chainId: chain.id, symbol: 'RAW', contractAddress: `0xraw${entity.id}` },
+    });
+    await prisma.contractAudit.create({
+      data: { coinId: coin.id, isHoneypot: false, raw: { internal: 'should-not-leak', apiKey: 'sk-fake-123' } },
+    });
+
+    const res = await request(app.getHttpServer()).get(`/entities/${entity.id}`).expect(200);
+    const audit = res.body.coin.audits[0];
+    expect(audit).toBeDefined();
+    expect(audit.isHoneypot).toBe(false);
+    expect(audit).not.toHaveProperty('raw');
+  });
+
   it('404s deleting a link that does not belong to the given entity', async () => {
     const entityIdA = await createEntity(editor.accessToken, 'linkcross-a');
     const entityIdB = await createEntity(editor.accessToken, 'linkcross-b');

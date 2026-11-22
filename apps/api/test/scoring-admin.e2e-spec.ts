@@ -221,6 +221,37 @@ describe('Risk scoring — admin endpoints and visibility (e2e)', () => {
     expect(new Set(entityIdsInTop).size).toBe(entityIdsInTop.length);
   });
 
+  it('GET /scoring/top never includes an INSUFFICIENT_DATA (score=null) entity', async () => {
+    // Deliberately NOT createExchangeModel() — that one always includes
+    // REPORT_RATE, which is always available (a count of 0 is real data),
+    // so confidence could never drop below the threshold. A model with
+    // only LICENSE (unavailable with no ExchangeProfile) has confidence 0.
+    const prisma = app.get(PrismaService);
+    const model = await prisma.riskModel.create({
+      data: { entityType: EntityType.EXCHANGE, version: nextVersion++, active: true },
+    });
+    modelIds.push(model.id);
+    await prisma.riskFactorDef.create({
+      data: { modelId: model.id, code: 'LICENSE', name: 'License', weight: 100, maxPoints: 100 },
+    });
+    const entity = await createExchangeEntity();
+    const recomputed = await request(app.getHttpServer())
+      .post(`/scoring/recompute/${entity.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(201);
+    expect(recomputed.body.level).toBe('INSUFFICIENT_DATA');
+    expect(recomputed.body.score).toBeNull();
+
+    const res = await request(app.getHttpServer()).get('/scoring/top?take=50').expect(200);
+    const entityIdsInTop = res.body.map((s: { entityId: string }) => s.entityId);
+    expect(entityIdsInTop).not.toContain(entity.id);
+  });
+
+  it('clamps GET /scoring/top\'s take to a hard cap regardless of what is requested', async () => {
+    const res = await request(app.getHttpServer()).get('/scoring/top?take=100000').expect(200);
+    expect(res.body.length).toBeLessThanOrEqual(50);
+  });
+
   it('lists only active models publicly via GET /scoring/models/active', async () => {
     const activeModel = await createExchangeModel(true);
     await createExchangeModel(false);

@@ -76,7 +76,11 @@ export class ScoringService {
   // from entities whose model is active (same visibility rule as
   // findAll/findOne) and from each entity's CURRENT (latest) score, never
   // a stale historical high.
-  async topRiskScores(take = 10) {
+  async topRiskScores(take?: number) {
+    // Pagination is mandatory, not optional — clamp regardless of what the
+    // caller asks for, so this can never return an unbounded result as the
+    // dataset grows.
+    const safeTake = Number.isFinite(take) && take! > 0 ? Math.min(take!, 50) : 10;
     const latestPerEntity = await this.prisma.riskScore.findMany({
       where: { model: { active: true }, score: { not: null } },
       orderBy: [{ entityId: 'asc' }, { computedAt: 'desc' }],
@@ -87,7 +91,7 @@ export class ScoringService {
         entity: { select: { id: true, name: true, slug: true, type: true } },
       },
     });
-    return latestPerEntity.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, take);
+    return latestPerEntity.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, safeTake);
   }
 
   // ───────────── risk model management (ADMIN-only at the controller) ─────────────

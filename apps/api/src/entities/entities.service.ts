@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { EntityType, Prisma, Role } from '@prisma/client';
+import { EntityStatus, EntityType, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ScoringService } from '../scoring/scoring.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
@@ -23,13 +23,21 @@ export class EntitiesService {
     }
   }
 
-  findAll(q?: string, type?: EntityType) {
+  // Pagination is mandatory, not optional: an unbounded public list
+  // endpoint is an easy way to accidentally ship an unpaginated data dump.
+  findAll(q?: string, type?: EntityType, take?: number) {
+    const safeTake = Number.isFinite(take) && take! > 0 ? Math.min(take!, 50) : 20;
     return this.prisma.entity.findMany({
       where: {
         ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
         ...(type ? { type } : {}),
+        // MERGED entities are superseded duplicates, not meant to surface
+        // in browse/search results (direct navigation by slug/id in
+        // findOne() below still resolves them, for old bookmarked links).
+        status: { not: EntityStatus.MERGED },
       },
       orderBy: { name: 'asc' },
+      take: safeTake,
     });
   }
 
@@ -40,7 +48,29 @@ export class EntitiesService {
       include: {
         stats: true,
         links: true,
-        coin: { include: { audits: { orderBy: { scannedAt: 'desc' }, take: 1 } } },
+        coin: {
+          include: {
+            audits: {
+              orderBy: { scannedAt: 'desc' },
+              take: 1,
+              // `raw` deliberately excluded: an arbitrary third-party scan
+              // payload (GoPlus/DEXScreener/etc.), not shaped for public
+              // display and not vetted for what it might contain.
+              select: {
+                id: true,
+                ownerRenounced: true,
+                isHoneypot: true,
+                liquidityLocked: true,
+                liquidityUsd: true,
+                top10HolderPct: true,
+                buyTaxPct: true,
+                sellTaxPct: true,
+                isProxy: true,
+                scannedAt: true,
+              },
+            },
+          },
+        },
       },
     });
   }
