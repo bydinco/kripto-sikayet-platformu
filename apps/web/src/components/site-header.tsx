@@ -25,6 +25,7 @@ export function SiteHeader({ locale, dictionary }: { locale: Locale; dictionary:
         </Link>
         <nav className="site-nav">
           <Link href={`/${locale}/entities`}>{dictionary.nav.entities}</Link>
+          <Link href={`/${locale}/methodology`}>{dictionary.nav.methodology}</Link>
           {status === 'authenticated' ? (
             <>
               <Link href={`/${locale}/reports/new`}>{dictionary.nav.submitReport}</Link>

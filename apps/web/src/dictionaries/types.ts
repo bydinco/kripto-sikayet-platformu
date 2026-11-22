@@ -1,4 +1,4 @@
-import type { ReportCategory, ReportStatus } from '../lib/api-models';
+import type { ReportCategory, ReportStatus, RiskLevel } from '../lib/api-models';
 
 export interface Dictionary {
   siteName: string;
@@ -10,14 +10,25 @@ export interface Dictionary {
     myReports: string;
     logout: string;
     submitReport: string;
+    methodology: string;
   };
-  footer: { disclaimer: string };
+  footer: { disclaimer: string; riskNote: string };
   home: {
     tagline: string;
     searchPlaceholder: string;
     searchButton: string;
     recentReportsTitle: string;
     noRecentReports: string;
+    heroEyebrow: string;
+    statTotalReports: string;
+    statEntities: string;
+    statPublished: string;
+    topRiskTitle: string;
+    topRiskEmpty: string;
+    scoresNotLiveYet: string;
+    howItWorksTitle: string;
+    howItWorksSteps: [string, string, string];
+    browseByTypeTitle: string;
   };
   entities: {
     title: string;
@@ -34,10 +45,34 @@ export interface Dictionary {
     noData: string;
     reportsTitle: string;
     noReports: string;
+    tabs: { overview: string; reports: string; responses: string; contract: string; history: string };
+    scoreTitle: string;
+    confidenceLabel: string;
+    basedOnSignals: string; // "{n}/{m} sinyale dayanır" built in code, this is the connecting word
+    methodologyLink: string;
+    disclaimer: string;
+    insufficientData: string;
+    noModel: string;
+    whyThisScore: string;
+    noFactors: string;
+    contractTitle: string;
+    contractFields: {
+      honeypot: string;
+      liquidityLocked: string;
+      top10Holders: string;
+      sellTax: string;
+      ownerRenounced: string;
+      noData: string;
+    };
+    claimPage: string;
+    watchEntity: string;
+    historyTitle: string;
+    noHistory: string;
   };
   reportDetail: {
     statusLabel: string;
     disputedBadge: string;
+    userClaimBadge: string;
     evidenceTitle: string;
     noEvidence: string;
     responsesTitle: string;
@@ -46,9 +81,20 @@ export interface Dictionary {
     lossLabel: string;
     incidentDateLabel: string;
     categoryLabel: string;
+    chainVerifiedLabel: string;
+    notVerifiedLabel: string;
+    meTooButton: string;
+    commentsTitle: string;
+    noComments: string;
+    shareButton: string;
+    reportNoticeButton: string;
+    timelineTitle: string;
   };
   reportForm: {
     title: string;
+    step1Title: string;
+    step2Title: string;
+    step3Title: string;
     entityLabel: string;
     entitySearchPlaceholder: string;
     noEntitySelected: string;
@@ -62,12 +108,16 @@ export interface Dictionary {
     removeEvidence: string;
     evidenceTypeLabel: string;
     evidenceValueLabel: string;
+    fileUploadComingSoon: string;
+    consentLabel: string;
     submit: string;
     submitting: string;
     loginRequired: string;
     goToLogin: string;
     success: string;
     viewReport: string;
+    duplicateError: string;
+    rateLimitError: string;
   };
   myReports: { title: string; empty: string };
   auth: {
@@ -84,6 +134,14 @@ export interface Dictionary {
   statuses: Record<ReportStatus, string>;
   categories: Record<ReportCategory, string>;
   evidenceTypes: Record<'TX_HASH' | 'WALLET_ADDRESS' | 'LINK', string>;
+  riskLevels: Record<RiskLevel, string>;
+  methodologyPage: {
+    title: string;
+    intro: string;
+    weightLabel: string;
+    sourceLabel: string;
+    empty: string;
+  };
   admin: {
     unauthorized: string;
     nav: { reports: string; notices: string; entities: string };

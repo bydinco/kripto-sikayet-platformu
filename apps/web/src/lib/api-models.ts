@@ -86,6 +86,8 @@ export type ModerationAction =
 
 export type StatusActorType = 'MODERATOR' | 'AUTHOR' | 'ENTITY' | 'SYSTEM';
 
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH_RISK_SIGNAL' | 'CRITICAL_SIGNAL' | 'INSUFFICIENT_DATA';
+
 export interface ApiUser {
   id: string;
   email?: string; // only present for the owner/an admin
@@ -123,6 +125,27 @@ export interface ApiEntityLink {
   verifiedByUs: boolean;
 }
 
+export interface ApiContractAudit {
+  id: string;
+  ownerRenounced: boolean | null;
+  isHoneypot: boolean | null;
+  liquidityLocked: boolean | null;
+  liquidityUsd: string | null;
+  top10HolderPct: string | null;
+  buyTaxPct: string | null;
+  sellTaxPct: string | null;
+  isProxy: boolean | null;
+  scannedAt: string;
+}
+
+export interface ApiCoin {
+  id: string;
+  symbol: string;
+  contractAddress: string;
+  chainId: string;
+  audits: ApiContractAudit[];
+}
+
 export interface ApiEntity {
   id: string;
   type: EntityType;
@@ -142,6 +165,7 @@ export interface ApiEntity {
   updatedAt: string;
   stats: ApiEntityStats | null;
   links: ApiEntityLink[];
+  coin: ApiCoin | null;
 }
 
 export interface ApiReport {
@@ -207,6 +231,46 @@ export interface ApiNotice {
   decidedAt: string | null;
   decision: string | null;
   handlerId: string | null;
+}
+
+export interface ApiRiskFactorDef {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  weight: string; // Decimal -> string, see ApiEntityStats note
+  maxPoints: number;
+  dataSource: string | null;
+}
+
+export interface ApiRiskModel {
+  id: string;
+  entityType: EntityType;
+  version: number;
+  methodology: string | null;
+  active: boolean;
+  publishedAt: string | null;
+  factors?: ApiRiskFactorDef[];
+}
+
+export interface ApiRiskScoreFactor {
+  id: string;
+  points: string; // Decimal -> string
+  rawValue: string | null;
+  note: string | null;
+  factor: ApiRiskFactorDef;
+}
+
+export interface ApiRiskScore {
+  id: string;
+  entityId: string;
+  modelId: string;
+  score: number | null; // null when level is INSUFFICIENT_DATA
+  level: RiskLevel;
+  confidence: number;
+  computedAt: string;
+  factors: ApiRiskScoreFactor[];
+  model: ApiRiskModel;
 }
 
 export interface ApiEvidence {

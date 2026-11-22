@@ -34,7 +34,11 @@ export class EntitiesService {
   findOne(idOrSlug: string) {
     return this.prisma.entity.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
-      include: { stats: true, links: true },
+      include: {
+        stats: true,
+        links: true,
+        coin: { include: { audits: { orderBy: { scannedAt: 'desc' }, take: 1 } } },
+      },
     });
   }
 

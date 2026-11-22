@@ -99,10 +99,25 @@ bildirim kararı — MODERATOR/ADMIN), `entities` (varlık oluştur/düzenle,
 link ekle/sil — EDITOR/ADMIN). Sayfalar `noindex`; asıl yetki kontrolü API
 tarafındaki `@Roles()` guard'larında, arayüzdeki rol kontrolü sadece UX.
 
+## Risk skoru motoru
+
+`apps/api/src/scoring/risk-score-engine.ts`: saf, deterministik
+`computeRiskScore(model, inputs)`. Veri eksikse faktör atlanır, confidence
+düşer; confidence < 40 (taslak eşik) → `INSUFFICIENT_DATA`, `score: null`
+(DB'de nullable, API sayı sızdırmaz). `Entity.verified` input tipinde hiç
+yer almaz. `ScoringService.recomputeScore` her zaman o varlık türünün en
+güncel `RiskModel` versiyonunu kullanır (active olsun olmasın — aktiflik
+sadece public görünürlüğü etkiler); model yoksa sessiz no-op.
+`safeRecomputeScore` hiç throw etmez, sadece loglar (rapor/yanıt/kanıt
+akışını bozmaz). Tetikleyiciler: rapor durum geçişi, çözüm onayı, marka
+yanıtı, kanıt onay/ret, yeni `ContractAudit` (`POST
+/entities/:id/contract-audits`), + günlük `@nestjs/schedule` cron
+(Postgres advisory lock ile tekilleştirilir). Model aktifleştirme/
+pasifleştirme: `PATCH /scoring/models/:id` (ADMIN). Seed'deki v1 ağırlıkları
+taslaktır, kalibre edilmemiştir.
+
 ## Henüz yapılmayanlar
 
-- Risk skoru motoru (şema `RiskModel`/`RiskScore`/`RiskScoreFactor` var,
-  hesaplama mantığı yok)
 - SIWE / cüzdan imzası doğrulaması
 - Dosya yükleme (Evidence.fileUrl alanı var, yükleme akışı yok)
 - E-posta doğrulama gönderimi/kontrolü
