@@ -5,9 +5,13 @@ import { apiFetch } from '../../../../lib/api-client';
 import { buildMetadata } from '../../../../lib/seo';
 import { getDictionary } from '../../../../dictionaries/get-dictionary';
 import type { Locale } from '../../../../lib/locale';
-import type { ApiEntity, ApiEntityResponse, ApiEvidence, ApiReport } from '../../../../lib/api-models';
+import type { ApiEntity, ApiEntityResponse, ApiEvidence, ApiReport, ApiRiskScore } from '../../../../lib/api-models';
 import { formatDate } from '../../../../lib/format';
 import { StatusBadge } from '../../../../components/status-badge';
+import { Pill } from '../../../../components/pill';
+import { RiskMeter } from '../../../../components/risk-meter';
+import { ShareButton } from '../../../../components/share-button';
+import { ReportNoticeForm } from '../../../../components/report-notice-form';
 
 async function getReport(id: string): Promise<ApiReport | null> {
   try {
@@ -42,6 +46,15 @@ async function getResponses(reportId: string): Promise<ApiEntityResponse[]> {
     });
   } catch {
     return [];
+  }
+}
+
+async function getLatestRiskScore(entityId: string): Promise<ApiRiskScore | null> {
+  try {
+    const scores = await apiFetch<ApiRiskScore[]>(`/scoring?entityId=${entityId}`, { next: { revalidate: 300 } });
+    return scores[0] ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -83,74 +96,148 @@ export default async function ReportDetailPage({ params }: PageProps<'/[locale]/
     getEvidence(report.id),
     getResponses(report.id),
   ]);
+  const riskScore = entity ? await getLatestRiskScore(entity.id) : null;
+  const isDisputed = responses.some((r) => r.disputed);
 
   return (
     <div className="container stack" style={{ paddingTop: 32, paddingBottom: 48 }}>
-      <div className="stack">
-        {entity ? (
-          <Link href={`/${locale}/entities/${entity.slug}`} className="muted">
-            {entity.name}
-          </Link>
-        ) : null}
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h1>{report.title}</h1>
-          <StatusBadge status={report.status} dictionary={dictionary} />
-        </div>
-        <p className="muted">{dictionary.categories[report.category]}</p>
-        {/* Plain-text rendering only — never dangerouslySetInnerHTML for user content. */}
-        <p style={{ whiteSpace: 'pre-wrap' }}>{report.body}</p>
-        <div className="row">
-          {report.lossUsd ? (
-            <span className="muted">
-              {dictionary.reportDetail.lossLabel}: ${report.lossUsd}
-            </span>
-          ) : null}
-          {report.incidentAt ? (
-            <span className="muted">
-              {dictionary.reportDetail.incidentDateLabel}: {formatDate(report.incidentAt, locale)}
-            </span>
-          ) : null}
-        </div>
-        {report.status === 'RESOLVED' && report.satisfactionRating ? (
-          <p>
-            {dictionary.reportDetail.satisfactionLabel}: {report.satisfactionRating}/5
-          </p>
-        ) : null}
-      </div>
+      <div className="layout-two-col">
+        <div className="stack">
+          <div className="stack">
+            {entity ? (
+              <Link href={`/${locale}/entities/${entity.slug}`} className="muted">
+                {entity.name}
+              </Link>
+            ) : null}
+            <div className="row">
+              <Pill variant="ne">{dictionary.reportDetail.userClaimBadge}</Pill>
+              <StatusBadge status={report.status} dictionary={dictionary} />
+              {isDisputed ? <Pill variant="wa">{dictionary.reportDetail.disputedBadge}</Pill> : null}
+            </div>
+            <h1>{report.title}</h1>
+            <p className="muted">{dictionary.categories[report.category]}</p>
+            {/* Plain-text rendering only — never dangerouslySetInnerHTML for user content. */}
+            <p style={{ whiteSpace: 'pre-wrap' }}>{report.body}</p>
+            <div className="row">
+              {report.lossUsd ? (
+                <span className="muted">
+                  {dictionary.reportDetail.lossLabel}: ${report.lossUsd}
+                </span>
+              ) : null}
+              {report.incidentAt ? (
+                <span className="muted">
+                  {dictionary.reportDetail.incidentDateLabel}: {formatDate(report.incidentAt, locale)}
+                </span>
+              ) : null}
+            </div>
+            {report.status === 'RESOLVED' && report.satisfactionRating ? (
+              <p>
+                {dictionary.reportDetail.satisfactionLabel}: {report.satisfactionRating}/5
+              </p>
+            ) : null}
+            <div className="row">
+              <ShareButton label={dictionary.reportDetail.shareButton} copiedLabel={dictionary.reportDetail.shareCopied} />
+              {/* No ReportVote API yet — disabled, not pretending to work. */}
+              <button type="button" className="button button-secondary" disabled title={dictionary.reportDetail.meTooButton}>
+                {dictionary.reportDetail.meTooButton}
+              </button>
+            </div>
+          </div>
 
-      <div className="stack">
-        <h2>{dictionary.reportDetail.evidenceTitle}</h2>
-        {evidence.length === 0 ? (
-          <p className="muted">{dictionary.reportDetail.noEvidence}</p>
-        ) : (
-          evidence.map((item) => (
-            <div key={item.id} className="card">
-              <span className="muted">{item.type}</span>{' '}
-              {item.type === 'LINK' && item.value && isSafeHttpUrl(item.value) ? (
-                <a href={item.value} target="_blank" rel="ugc nofollow noopener noreferrer">
-                  {item.value}
-                </a>
+          <div className="stack">
+            <h2>{dictionary.reportDetail.evidenceTitle}</h2>
+            {evidence.length === 0 ? (
+              <p className="muted">{dictionary.reportDetail.noEvidence}</p>
+            ) : (
+              evidence.map((item) => (
+                <div key={item.id} className="card row" style={{ justifyContent: 'space-between' }}>
+                  <span>
+                    <span className="muted">{dictionary.evidenceTypes[item.type as 'TX_HASH' | 'WALLET_ADDRESS' | 'LINK'] ?? item.type}</span>{' '}
+                    {item.type === 'LINK' && item.value && isSafeHttpUrl(item.value) ? (
+                      <a href={item.value} target="_blank" rel="ugc nofollow noopener noreferrer">
+                        {item.value}
+                      </a>
+                    ) : (
+                      <span className={item.type === 'TX_HASH' || item.type === 'WALLET_ADDRESS' ? 'mono' : undefined}>
+                        {item.value}
+                      </span>
+                    )}
+                  </span>
+                  {item.type === 'TX_HASH' || item.type === 'WALLET_ADDRESS' ? (
+                    <Pill variant={item.verifiedOnChain ? 'ok' : 'ne'}>
+                      {item.verifiedOnChain ? dictionary.reportDetail.chainVerifiedLabel : dictionary.reportDetail.notVerifiedLabel}
+                    </Pill>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="stack">
+            <h2>{dictionary.reportDetail.responsesTitle}</h2>
+            {responses.length === 0 ? (
+              <p className="muted">{dictionary.reportDetail.noResponses}</p>
+            ) : (
+              responses.map((response) => (
+                <div key={response.id} className="card stack">
+                  {response.isDispute ? <Pill variant="wa">{dictionary.reportDetail.disputedBadge}</Pill> : null}
+                  <p style={{ whiteSpace: 'pre-wrap' }}>{response.body}</p>
+                  <span className="muted">{formatDate(response.createdAt, locale)}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="stack">
+            <h2>{dictionary.reportDetail.commentsTitle}</h2>
+            {/* No ReportComment API yet — show the honest empty state only. */}
+            <p className="muted">{dictionary.reportDetail.noComments}</p>
+          </div>
+        </div>
+
+        <div className="stack">
+          <div className="card stack">
+            <h2>{dictionary.reportDetail.timelineTitle}</h2>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <span className="muted">{dictionary.reportDetail.timelineCreated}</span>
+              <span>{formatDate(report.createdAt, locale)}</span>
+            </div>
+            {report.publishedAt ? (
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">{dictionary.reportDetail.timelinePublished}</span>
+                <span>{formatDate(report.publishedAt, locale)}</span>
+              </div>
+            ) : null}
+            {report.resolvedAt ? (
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">{dictionary.reportDetail.timelineResolved}</span>
+                <span>{formatDate(report.resolvedAt, locale)}</span>
+              </div>
+            ) : null}
+          </div>
+
+          {entity ? (
+            <div className="card stack">
+              <h2>{dictionary.entityDetail.scoreTitle}</h2>
+              {!riskScore || riskScore.score === null ? (
+                <p className="muted">{dictionary.entityDetail.insufficientData}</p>
               ) : (
-                <span>{item.value}</span>
+                <div className="stack">
+                  <RiskMeter score={riskScore.score} sm />
+                  <div className="row" style={{ justifyContent: 'space-between' }}>
+                    <span className="numeric">{riskScore.score}/100</span>
+                    <Pill variant={riskScore.level === 'CRITICAL_SIGNAL' ? 'co' : 'wa'}>{dictionary.riskLevels[riskScore.level]}</Pill>
+                  </div>
+                </div>
               )}
+              <Link href={`/${locale}/entities/${entity.slug}`} className="muted">
+                {entity.name}
+              </Link>
             </div>
-          ))
-        )}
-      </div>
+          ) : null}
 
-      <div className="stack">
-        <h2>{dictionary.reportDetail.responsesTitle}</h2>
-        {responses.length === 0 ? (
-          <p className="muted">{dictionary.reportDetail.noResponses}</p>
-        ) : (
-          responses.map((response) => (
-            <div key={response.id} className="card stack">
-              {response.isDispute ? <span className="badge">{dictionary.reportDetail.disputedBadge}</span> : null}
-              <p style={{ whiteSpace: 'pre-wrap' }}>{response.body}</p>
-              <span className="muted">{formatDate(response.createdAt, locale)}</span>
-            </div>
-          ))
-        )}
+          <ReportNoticeForm reportId={report.id} dictionary={dictionary} />
+        </div>
       </div>
     </div>
   );

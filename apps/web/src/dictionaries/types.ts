@@ -87,8 +87,15 @@ export interface Dictionary {
     commentsTitle: string;
     noComments: string;
     shareButton: string;
+    shareCopied: string;
     reportNoticeButton: string;
+    noticeNameLabel: string;
+    noticeSubmit: string;
+    noticeSubmitted: string;
     timelineTitle: string;
+    timelineCreated: string;
+    timelinePublished: string;
+    timelineResolved: string;
   };
   reportForm: {
     title: string;
