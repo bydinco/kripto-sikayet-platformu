@@ -16,6 +16,7 @@ import { ScoringModule } from './scoring/scoring.module.js';
 import { ModerationModule } from './moderation/moderation.module.js';
 import { NoticesModule } from './notices/notices.module.js';
 import { ResponsesModule } from './responses/responses.module.js';
+import { MarketModule } from './market/market.module.js';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ResponsesModule } from './responses/responses.module.js';
     ModerationModule,
     NoticesModule,
     ResponsesModule,
+    MarketModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

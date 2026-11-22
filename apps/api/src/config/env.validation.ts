@@ -19,4 +19,12 @@ export const envValidationSchema = Joi.object({
   JWT_ACCESS_SECRET: Joi.string().min(16).required(),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().positive().default(30),
+  // CoinGecko price feed (see CLAUDE.md "Piyasa fiyat verisi" section).
+  // Unset = the whole feature is off: the refresh job never runs and the
+  // read endpoints just stay empty (no fabricated data, band/box hidden).
+  COINGECKO_API_KEY: Joi.string().optional().allow(''),
+  COINGECKO_API_HEADER: Joi.string().default('x-cg-demo-api-key'),
+  COINGECKO_BASE_URL: Joi.string().uri().default('https://api.coingecko.com/api/v3'),
+  MARKET_REFRESH_INTERVAL_SECONDS: Joi.number().integer().positive().default(120),
+  MARKET_STALE_THRESHOLD_MINUTES: Joi.number().integer().positive().default(15),
 });

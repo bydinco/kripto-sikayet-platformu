@@ -370,6 +370,11 @@ model Coin {
   contractAddress String
   decimals        Int?
   launchedAt      DateTime?
+  // CoinGecko's own id for this coin (e.g. "bitcoin"), used only to look up
+  // live price data — never fed into the risk score engine. Admin-editable,
+  // never auto-filled. Check CoinGecko's plan/ToS before relying on this in
+  // production (CLAUDE.md).
+  coingeckoId     String?
   audits          ContractAudit[]
 
   @@unique([chainId, contractAddress])

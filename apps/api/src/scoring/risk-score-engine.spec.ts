@@ -146,3 +146,29 @@ describe('computeRiskScore — manipulation resistance', () => {
     expect(resolutionFactor?.points).toBe(5); // full risk weight for RESOLUTION, unreduced
   });
 });
+
+describe('RiskEngineInputs — price data never feeds the score', () => {
+  // Compile-time guarantee, parallel to Entity.verified's absence above:
+  // nothing named "price" exists anywhere on this type (top-level or on
+  // any of its nested input groups), so the engine couldn't read a price
+  // even if a caller tried to pass one. See CLAUDE.md's "Piyasa fiyat
+  // verisi" section — price is informational only, sourced from CoinGecko
+  // outside this module entirely.
+  it('has no price field on the top-level input type', () => {
+    expectTypeOf<RiskEngineInputs>().not.toHaveProperty('price');
+    expectTypeOf<RiskEngineInputs>().not.toHaveProperty('priceUsd');
+  });
+
+  it('has no price field on any nested input group (contract/exchange/wallet/complaints)', () => {
+    expectTypeOf<NonNullable<RiskEngineInputs['contract']>>().not.toHaveProperty('price');
+    expectTypeOf<NonNullable<RiskEngineInputs['exchange']>>().not.toHaveProperty('price');
+    expectTypeOf<NonNullable<RiskEngineInputs['wallet']>>().not.toHaveProperty('price');
+    expectTypeOf<RiskEngineInputs['complaints']>().not.toHaveProperty('price');
+  });
+
+  it('computeRiskScore ignores an excess price field even if a caller bypasses the type checker', () => {
+    const withPrice = { ...baseInputs(), price: 999_999 } as unknown as RiskEngineInputs;
+    const without = baseInputs();
+    expect(computeRiskScore(COIN_MODEL, withPrice)).toEqual(computeRiskScore(COIN_MODEL, without));
+  });
+});
