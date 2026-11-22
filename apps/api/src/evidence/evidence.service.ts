@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Role, ReportStatus, StatusActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ScoringService } from '../scoring/scoring.service.js';
 import { CreateEvidenceDto } from './dto/create-evidence.dto.js';
 import { UpdateEvidenceDto } from './dto/update-evidence.dto.js';
 import { isPublicStatus } from '../reports/report-state-machine.js';
@@ -24,7 +25,10 @@ function canView(
 
 @Injectable()
 export class EvidenceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scoring: ScoringService,
+  ) {}
 
   async create(dto: CreateEvidenceDto, currentUser: JwtPayload) {
     const report = await this.prisma.report.findUnique({ where: { id: dto.reportId } });
@@ -90,7 +94,20 @@ export class EvidenceService {
       throw new ForbiddenException('Kanıt onayını sadece moderatör/admin verebilir.');
     }
     await this.assertOwnsEvidence(id, currentUser);
-    return this.prisma.evidence.update({ where: { id }, data: updateEvidenceDto });
+    const updated = await this.prisma.evidence.update({
+      where: { id },
+      data: updateEvidenceDto,
+      include: { report: { select: { entityId: true } } },
+    });
+
+    if (updateEvidenceDto.approved !== undefined) {
+      // approved/unapproved evidence changes which reports qualify for the
+      // complaint-based risk factors (REPORT_RATE, CHAIN_VERIFIED_RATIO, ...).
+      await this.scoring.safeRecomputeScore(updated.report.entityId);
+    }
+
+    const { report: _report, ...rest } = updated;
+    return rest;
   }
 
   async remove(id: string, currentUser: JwtPayload) {

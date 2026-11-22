@@ -1,14 +1,19 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ScoringService } from '../scoring/scoring.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
 import { UpdateEntityDto } from './dto/update-entity.dto.js';
 import { CreateEntityLinkDto } from './dto/create-entity-link.dto.js';
+import { CreateContractAuditDto } from './dto/create-contract-audit.dto.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
 @Injectable()
 export class EntitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scoring: ScoringService,
+  ) {}
 
   async create(createEntityDto: CreateEntityDto) {
     try {
@@ -74,6 +79,18 @@ export class EntitiesService {
       throw new NotFoundException('Link bulunamadı.');
     }
     return this.prisma.entityLink.delete({ where: { id: linkId } });
+  }
+
+  // There is no API yet to create a Coin profile itself (seed/direct DB
+  // only) — 400 if the entity doesn't have one.
+  async recordContractAudit(entityId: string, dto: CreateContractAuditDto) {
+    const coin = await this.prisma.coin.findUnique({ where: { entityId } });
+    if (!coin) {
+      throw new BadRequestException('Bu varlığın Coin profili yok.');
+    }
+    const audit = await this.prisma.contractAudit.create({ data: { coinId: coin.id, ...dto } });
+    await this.scoring.safeRecomputeScore(entityId);
+    return audit;
   }
 
   private mapKnownError(error: unknown): Error {

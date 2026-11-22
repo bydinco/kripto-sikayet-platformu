@@ -5,6 +5,7 @@ import { EntitiesService } from './entities.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
 import { UpdateEntityDto } from './dto/update-entity.dto.js';
 import { CreateEntityLinkDto } from './dto/create-entity-link.dto.js';
+import { CreateContractAuditDto } from './dto/create-contract-audit.dto.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -61,5 +62,11 @@ export class EntitiesController {
   @Delete(':id/links/:linkId')
   removeLink(@Param('id') id: string, @Param('linkId') linkId: string) {
     return this.entitiesService.removeLink(id, linkId);
+  }
+
+  @Roles(Role.ADMIN, Role.EDITOR)
+  @Post(':id/contract-audits')
+  addContractAudit(@Param('id') id: string, @Body() dto: CreateContractAuditDto) {
+    return this.entitiesService.recordContractAudit(id, dto);
   }
 }

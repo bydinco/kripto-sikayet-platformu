@@ -8,6 +8,7 @@ import {
 import { Role, ReportStatus, StatusActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EntityStatsService } from '../entities/entity-stats.service.js';
+import { ScoringService } from '../scoring/scoring.service.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { CONTENT_FIELDS, SATISFACTION_FIELDS, UpdateReportDto } from './dto/update-report.dto.js';
 import {
@@ -44,6 +45,7 @@ export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly entityStats: EntityStatsService,
+    private readonly scoring: ScoringService,
   ) {}
 
   async create(dto: CreateReportDto, currentUser: JwtPayload) {
@@ -236,6 +238,7 @@ export class ReportsService {
     ]);
 
     await this.entityStats.recomputeStats(report.entityId);
+    await this.scoring.safeRecomputeScore(report.entityId);
     return updated;
   }
 
@@ -292,6 +295,7 @@ export class ReportsService {
     ]);
 
     await this.entityStats.recomputeStats(report.entityId);
+    await this.scoring.safeRecomputeScore(report.entityId);
     return updated;
   }
 

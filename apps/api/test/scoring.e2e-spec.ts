@@ -41,7 +41,12 @@ describe('Scoring (e2e)', () => {
       data: { type: 'COIN', slug: `coin-score-${Date.now()}`, name: 'Test Coin' },
     });
     entityId = entity.id;
-    const model = await prisma.riskModel.create({ data: { entityType: 'COIN', version: 1 } });
+    // A high, randomized version avoids colliding with the real seeded v1
+    // COIN model (entityType+version is unique) on a dev DB that has run
+    // `seed:dev`.
+    const model = await prisma.riskModel.create({
+      data: { entityType: 'COIN', version: 900_000 + Math.floor(Math.random() * 90_000) },
+    });
     modelId = model.id;
   });
 

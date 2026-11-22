@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -29,6 +30,10 @@ import { ResponsesModule } from './responses/responses.module.js';
       // that's bound only via APP_GUARD, so this is disabled by env instead.
       skipIf: () => process.env.NODE_ENV === 'test',
     }),
+    // No cron/scheduler existed anywhere in this codebase before the risk
+    // score engine (confirmed by grep) — added specifically for the daily
+    // recompute job in ScoringModule.
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,

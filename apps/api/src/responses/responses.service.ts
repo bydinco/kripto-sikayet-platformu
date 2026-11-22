@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Role, ReportStatus, StatusActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EntityStatsService } from '../entities/entity-stats.service.js';
+import { ScoringService } from '../scoring/scoring.service.js';
 import { CreateResponseDto } from './dto/create-response.dto.js';
 import { isPublicStatus } from '../reports/report-state-machine.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
@@ -23,6 +24,7 @@ export class ResponsesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly entityStats: EntityStatsService,
+    private readonly scoring: ScoringService,
   ) {}
 
   async create(reportId: string, dto: CreateResponseDto, currentUser: JwtPayload) {
@@ -72,6 +74,10 @@ export class ResponsesService {
     ]);
 
     await this.entityStats.recomputeStats(report.entityId);
+    // Any brand response — not just one that triggers a dispute — changes
+    // the BRAND_RESPONSE factor's input (ratio of qualifying reports with
+    // >=1 response), so it must recompute too.
+    await this.scoring.safeRecomputeScore(report.entityId);
     return response;
   }
 
