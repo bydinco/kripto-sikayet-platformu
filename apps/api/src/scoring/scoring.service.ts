@@ -72,6 +72,24 @@ export class ScoringService {
     return this.prisma.riskScore.delete({ where: { id } });
   }
 
+  // Public — "highest risk this week" on the homepage. Only ever draws
+  // from entities whose model is active (same visibility rule as
+  // findAll/findOne) and from each entity's CURRENT (latest) score, never
+  // a stale historical high.
+  async topRiskScores(take = 10) {
+    const latestPerEntity = await this.prisma.riskScore.findMany({
+      where: { model: { active: true }, score: { not: null } },
+      orderBy: [{ entityId: 'asc' }, { computedAt: 'desc' }],
+      distinct: ['entityId'],
+      include: {
+        factors: { include: { factor: true } },
+        model: true,
+        entity: { select: { id: true, name: true, slug: true, type: true } },
+      },
+    });
+    return latestPerEntity.sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, take);
+  }
+
   // ───────────── risk model management (ADMIN-only at the controller) ─────────────
 
   listActiveModels() {

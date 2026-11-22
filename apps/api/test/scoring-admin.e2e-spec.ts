@@ -187,6 +187,40 @@ describe('Risk scoring — admin endpoints and visibility (e2e)', () => {
     expect(refreshedB?.active).toBe(true);
   });
 
+  it('GET /scoring/top returns each entity once (its current score), active models only', async () => {
+    // This model must be the LATEST EXCHANGE version at the moment these
+    // two entities are recomputed (recomputeScore always picks the
+    // highest version), so create+recompute both before any later model.
+    await createExchangeModel(true);
+    const visibleEntityA = await createExchangeEntity();
+    const visibleEntityB = await createExchangeEntity();
+    await request(app.getHttpServer())
+      .post(`/scoring/recompute/${visibleEntityA.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/scoring/recompute/${visibleEntityB.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(201);
+
+    // A newer (higher-version), inactive model: now the latest overall,
+    // so anything recomputed after this point is hidden from /scoring/top.
+    await createExchangeModel(false);
+    const hiddenEntity = await createExchangeEntity();
+    await request(app.getHttpServer())
+      .post(`/scoring/recompute/${hiddenEntity.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .expect(201);
+
+    const res = await request(app.getHttpServer()).get('/scoring/top?take=50').expect(200);
+    const entityIdsInTop = res.body.map((s: { entityId: string }) => s.entityId);
+    expect(entityIdsInTop).toContain(visibleEntityA.id);
+    expect(entityIdsInTop).toContain(visibleEntityB.id);
+    expect(entityIdsInTop).not.toContain(hiddenEntity.id); // computed under an inactive (newer) model
+    // Every entity appears at most once.
+    expect(new Set(entityIdsInTop).size).toBe(entityIdsInTop.length);
+  });
+
   it('lists only active models publicly via GET /scoring/models/active', async () => {
     const activeModel = await createExchangeModel(true);
     await createExchangeModel(false);

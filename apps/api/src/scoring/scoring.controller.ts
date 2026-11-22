@@ -38,6 +38,13 @@ export class ScoringController {
     return this.scoringService.listActiveModels();
   }
 
+  // Public — the homepage's "highest risk this week" list.
+  @Public()
+  @Get('top')
+  topRiskScores(@Query('take') take?: string) {
+    return this.scoringService.topRiskScores(take ? Number(take) : undefined);
+  }
+
   // ADMIN only — activating a model deactivates every other version of
   // the same entityType.
   @Roles(Role.ADMIN)
