@@ -41,7 +41,18 @@ export class NoticesService {
 
     const tags: string[] = [];
     if (notice.reportId) tags.push(`report:${notice.reportId}`);
-    if (notice.entityId) tags.push(`entity-id:${notice.entityId}`);
+    if (notice.entityId) {
+      tags.push(`entity-id:${notice.entityId}`);
+      // The entity page's top-level fetch is tagged by slug (unknown here
+      // without a lookup), not by entityId — resolve it so that fetch is
+      // invalidated immediately too, instead of waiting out its own
+      // revalidate window.
+      const entity = await this.prisma.entity.findUnique({
+        where: { id: notice.entityId },
+        select: { slug: true },
+      });
+      if (entity) tags.push(`entity:${entity.slug}`);
+    }
     if (tags.length > 0) await this.revalidate.revalidate({ tags });
 
     return notice;

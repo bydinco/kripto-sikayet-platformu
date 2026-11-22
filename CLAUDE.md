@@ -154,11 +154,10 @@ Tag/path eşlemesi (web sayfaları `next: { tags: [...] }` ile fetch eder):
 | `methodology` | `/[locale]/methodology` | Model aktifleştirme/pasifleştirme |
 | `home` | `/[locale]` (ana sayfa, tüm fetch'leri) | Rapor durum geçişi, model aktifleştirme/pasifleştirme |
 
-Bilinen sınırlama: Notice'ın `entityId`'si varsa sadece `entity-id:` tag'i
-kullanılır (slug bilinmediği için `entity:<slug>` tetiklenmez) — varlık
-sayfasının en üstteki (slug'a göre) fetch'i bu durumda kendi 600s
-revalidate penceresini bekler, alt fetch'ler (raporlar/skor) hemen
-güncellenir.
+Notice'ın `entityId`'si varsa ama `reportId`'si yoksa (`NoticesService.update`),
+revalidate'den önce Entity'den `slug` sorgulanır, böylece hem `entity-id:`
+hem `entity:<slug>` tag'i aynı anda tetiklenir — varlık sayfasının ne üst
+(slug'a göre) fetch'i ne de alt fetch'leri 600s'lik pencereyi beklemez.
 
 ## Henüz yapılmayanlar
 

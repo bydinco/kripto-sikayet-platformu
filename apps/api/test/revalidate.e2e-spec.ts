@@ -37,6 +37,7 @@ describe('On-demand revalidation (e2e, mocked HTTP)', () => {
     await prisma.moderationLog.deleteMany({ where: { report: { entityId: { in: entityIds } } } });
     await prisma.evidence.deleteMany({ where: { report: { entityId: { in: entityIds } } } });
     await prisma.report.deleteMany({ where: { entityId: { in: entityIds } } });
+    await prisma.notice.deleteMany({ where: { entityId: { in: entityIds } } });
     await prisma.entity.deleteMany({ where: { id: { in: entityIds } } });
     await prisma.user.deleteMany({ where: { email: { in: [author.email, moderator.email, admin.email] } } });
     await app.close();
@@ -149,5 +150,36 @@ describe('On-demand revalidation (e2e, mocked HTTP)', () => {
     expect(body.tags).toEqual(expect.arrayContaining(['methodology', 'home', 'scoring']));
 
     await app.get(PrismaService).riskModel.delete({ where: { id: model.id } });
+  });
+
+  it('resolves the slug for an entityId-only Notice and revalidates both entity:<slug> and entity-id:<id>', async () => {
+    const entityId = await createEntity();
+    const entity = await app.get(PrismaService).entity.findUniqueOrThrow({ where: { id: entityId } });
+
+    const notice = await request(app.getHttpServer())
+      .post('/notices')
+      .send({
+        type: 'REMOVAL_REQUEST',
+        submitterName: 'Rights Holder',
+        submitterEmail: 'rights@example.com',
+        claim: 'Please remove this.',
+        entityId,
+      })
+      .expect(201);
+
+    fetchSpy.mockClear();
+
+    await request(app.getHttpServer())
+      .patch(`/notices/${notice.body.id}`)
+      .set('Authorization', `Bearer ${moderator.accessToken}`)
+      .send({ status: 'ACCEPTED', decision: 'Reviewed.' })
+      .expect(200);
+
+    const slugCalls = revalidateCallsContaining(`entity:${entity.slug}`);
+    expect(slugCalls.length).toBeGreaterThan(0);
+    const body = JSON.parse(slugCalls[0][1]?.body as string);
+    expect(body.tags).toEqual(expect.arrayContaining([`entity-id:${entityId}`, `entity:${entity.slug}`]));
+    // No reportId on this notice — must not fabricate a report: tag.
+    expect(body.tags.some((t: string) => t.startsWith('report:'))).toBe(false);
   });
 });
