@@ -57,6 +57,35 @@ export type EvidenceType =
   | 'DOCUMENT'
   | 'INVOICE';
 
+export type LinkKind =
+  | 'WEBSITE'
+  | 'X'
+  | 'TELEGRAM'
+  | 'DISCORD'
+  | 'YOUTUBE'
+  | 'INSTAGRAM'
+  | 'TIKTOK'
+  | 'GITHUB'
+  | 'DOCS'
+  | 'APP_STORE'
+  | 'PLAY_STORE'
+  | 'OTHER';
+
+export type NoticeType = 'REMOVAL_REQUEST' | 'CORRECTION_REQUEST' | 'COURT_ORDER' | 'PRIVACY_REQUEST' | 'COPYRIGHT';
+
+export type NoticeStatus = 'RECEIVED' | 'UNDER_REVIEW' | 'ACCEPTED' | 'REJECTED' | 'COMPLETED';
+
+export type ModerationAction =
+  | 'APPROVE'
+  | 'REQUEST_EVIDENCE'
+  | 'REJECT'
+  | 'REMOVE'
+  | 'RESTORE'
+  | 'FLAG_LEGAL'
+  | 'EDIT';
+
+export type StatusActorType = 'MODERATOR' | 'AUTHOR' | 'ENTITY' | 'SYSTEM';
+
 export interface ApiUser {
   id: string;
   email?: string; // only present for the owner/an admin
@@ -84,6 +113,16 @@ export interface ApiEntityStats {
   computedAt: string;
 }
 
+export interface ApiEntityLink {
+  id: string;
+  entityId: string;
+  kind: LinkKind;
+  url: string;
+  handle: string | null;
+  followers: number | null;
+  verifiedByUs: boolean;
+}
+
 export interface ApiEntity {
   id: string;
   type: EntityType;
@@ -102,6 +141,7 @@ export interface ApiEntity {
   createdAt: string;
   updatedAt: string;
   stats: ApiEntityStats | null;
+  links: ApiEntityLink[];
 }
 
 export interface ApiReport {
@@ -122,6 +162,51 @@ export interface ApiReport {
   satisfactionRating: number | null;
   satisfactionNote: string | null;
   resolutionRequestedAt: string | null;
+  // Present only when a MODERATOR/ADMIN fetches this report: the statuses
+  // the state machine allows next for their role.
+  allowedTransitions?: ReportStatus[];
+}
+
+export type ReportStatusCounts = Record<ReportStatus, number>;
+
+export interface ApiReportStatusHistory {
+  id: string;
+  reportId: string;
+  fromStatus: ReportStatus;
+  toStatus: ReportStatus;
+  actorId: string;
+  actorType: StatusActorType;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface ApiModerationLog {
+  id: string;
+  reportId: string | null;
+  postId: string | null;
+  moderatorId: string;
+  action: ModerationAction;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface ApiNotice {
+  id: string;
+  type: NoticeType;
+  status: NoticeStatus;
+  reportId: string | null;
+  postId: string | null;
+  entityId: string | null;
+  submitterName: string;
+  submitterEmail: string;
+  claim: string;
+  legalBasis: string | null;
+  courtOrderRef: string | null;
+  receivedAt: string;
+  dueAt: string | null;
+  decidedAt: string | null;
+  decision: string | null;
+  handlerId: string | null;
 }
 
 export interface ApiEvidence {

@@ -13,7 +13,9 @@ function withLocale(pathname: string, locale: Locale): string {
 
 export function SiteHeader({ locale, dictionary }: { locale: Locale; dictionary: Dictionary }) {
   const pathname = usePathname() ?? `/${locale}`;
-  const { status, logout } = useAuth();
+  const { status, user, logout } = useAuth();
+  const isModerator = user?.role === 'MODERATOR' || user?.role === 'ADMIN';
+  const isCatalogEditor = user?.role === 'EDITOR' || user?.role === 'ADMIN';
 
   return (
     <header className="site-header">
@@ -27,6 +29,13 @@ export function SiteHeader({ locale, dictionary }: { locale: Locale; dictionary:
             <>
               <Link href={`/${locale}/reports/new`}>{dictionary.nav.submitReport}</Link>
               <Link href={`/${locale}/reports/mine`}>{dictionary.nav.myReports}</Link>
+              {isModerator ? (
+                <>
+                  <Link href={`/${locale}/admin/reports`}>{dictionary.admin.nav.reports}</Link>
+                  <Link href={`/${locale}/admin/notices`}>{dictionary.admin.nav.notices}</Link>
+                </>
+              ) : null}
+              {isCatalogEditor ? <Link href={`/${locale}/admin/entities`}>{dictionary.admin.nav.entities}</Link> : null}
               <button type="button" className="button button-secondary" onClick={() => void logout()}>
                 {dictionary.nav.logout}
               </button>

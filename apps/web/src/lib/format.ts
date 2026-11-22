@@ -18,6 +18,17 @@ export function formatHours(value: string | number): string {
   return `${(n / 24).toFixed(1)}d`;
 }
 
+// Suggestion only — the field stays editable, and the API is the one that
+// enforces uniqueness (409 on conflict).
+export function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export function formatDate(value: string, locale: string): string {
   try {
     return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));

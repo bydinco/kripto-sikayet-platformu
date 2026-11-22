@@ -82,9 +82,16 @@ Host portları (5434/6380/3001/3002) bu makinedeki diğer projelerle
 - `ModerationLog` daha dar kapsamlıdır: sadece zorunlu gerekçeli, formel
   moderatör/admin kararları.
 
+## Moderasyon ve katalog paneli
+
+`apps/web/src/app/[locale]/admin/` altında: `reports` (durum filtreli
+kuyruk, kanıt onay/ret, geçiş formu — MODERATOR/ADMIN), `notices` (hukuki
+bildirim kararı — MODERATOR/ADMIN), `entities` (varlık oluştur/düzenle,
+link ekle/sil — EDITOR/ADMIN). Sayfalar `noindex`; asıl yetki kontrolü API
+tarafındaki `@Roles()` guard'larında, arayüzdeki rol kontrolü sadece UX.
+
 ## Henüz yapılmayanlar
 
-- Moderasyon paneli (AdminJS/Refine vb. henüz yok)
 - Risk skoru motoru (şema `RiskModel`/`RiskScore`/`RiskScoreFactor` var,
   hesaplama mantığı yok)
 - SIWE / cüzdan imzası doğrulaması

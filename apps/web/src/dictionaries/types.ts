@@ -84,4 +84,60 @@ export interface Dictionary {
   statuses: Record<ReportStatus, string>;
   categories: Record<ReportCategory, string>;
   evidenceTypes: Record<'TX_HASH' | 'WALLET_ADDRESS' | 'LINK', string>;
+  admin: {
+    unauthorized: string;
+    nav: { reports: string; notices: string; entities: string };
+    reportsQueue: {
+      title: string;
+      statusAll: string;
+      countsTitle: string;
+      empty: string;
+      openButton: string;
+    };
+    reportDetail: {
+      backToQueue: string;
+      evidenceTitle: string;
+      unapprovedBadge: string;
+      approveButton: string;
+      rejectButton: string;
+      responsesTitle: string;
+      noResponses: string;
+      timelineTitle: string;
+      transitionTitle: string;
+      noTransitions: string;
+      reasonLabel: string;
+      submitTransition: string;
+    };
+    notices: {
+      title: string;
+      overdueLabel: string;
+      statusLabel: string;
+      decisionLabel: string;
+      submitDecision: string;
+      empty: string;
+      claimLabel: string;
+      submitterLabel: string;
+    };
+    entities: {
+      title: string;
+      createTitle: string;
+      editTitle: string;
+      nameLabel: string;
+      typeLabel: string;
+      slugLabel: string;
+      slugHint: string;
+      summaryLabel: string;
+      verifiedLabel: string;
+      verifiedAdminOnly: string;
+      createButton: string;
+      saveButton: string;
+      linksTitle: string;
+      linkKindLabel: string;
+      linkUrlLabel: string;
+      addLink: string;
+      removeLink: string;
+      editButton: string;
+      empty: string;
+    };
+  };
 }
