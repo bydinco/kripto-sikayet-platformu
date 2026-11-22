@@ -70,6 +70,15 @@ Host portları (5434/6380/3001/3002) bu makinedeki diğer projelerle
   kullanıcının tüm oturumları iptal edilir (`auth.service.ts`).
 - Login/register `@nestjs/throttler` ile sınırlı (5 istek/60 sn).
 - E-posta doğrulama alanları şemada var ama gönderim/kontrol henüz yok (TODO).
+- `session_hint` cookie'si (httpOnly değil, `path=/`, aynı ömürle refreshToken
+  ile birlikte set edilir): web tarafı bunu görmeden `/auth/refresh` denemez,
+  böylece anonim ziyaretçi/bot gereksiz 401 almaz (`auth-context.tsx`).
+- `COOKIE_DOMAIN` (opsiyonel env, hem refreshToken hem session_hint için):
+  boşsa host-only (yerel geliştirmede api/web ikisi de "localhost" olduğu
+  için yeterli — cookie'ler portu ayırt etmez). Üretimde api ve web ayrı alt
+  alan adında olacağından, `session_hint`'in web alt alan adında
+  `document.cookie` ile görünebilmesi için ortak üst alan adına
+  (`example.com`) ayarlanmalı.
 
 ## Durum makinesi (`Report.status`)
 

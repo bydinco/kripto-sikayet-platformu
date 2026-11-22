@@ -48,6 +48,25 @@ describe('Auth (e2e)', () => {
     expect(res.headers['set-cookie']).toBeDefined();
   });
 
+  it('also sets a non-httpOnly session_hint cookie on path=/, alongside the httpOnly refresh cookie', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(200);
+
+    const cookies = res.headers['set-cookie'] as unknown as string[];
+    const refreshCookie = cookies.find((c) => c.startsWith('refreshToken='));
+    const hintCookie = cookies.find((c) => c.startsWith('session_hint='));
+    expect(hintCookie).toBeDefined();
+    expect(hintCookie).toContain('session_hint=1');
+    expect(hintCookie).not.toContain('HttpOnly');
+    expect(hintCookie).toContain('Path=/;');
+    expect(refreshCookie).toContain('HttpOnly');
+    // No COOKIE_DOMAIN in this test env: both cookies are host-only.
+    expect(refreshCookie).not.toContain('Domain=');
+    expect(hintCookie).not.toContain('Domain=');
+  });
+
   it('rejects wrong password and unknown email with the exact same message', async () => {
     const wrongPassword = await request(app.getHttpServer())
       .post('/auth/login')
@@ -140,5 +159,22 @@ describe('Auth (e2e)', () => {
       .expect(204);
 
     await request(app.getHttpServer()).post('/auth/refresh').set('Cookie', cookie).expect(401);
+  });
+
+  it('clears both the refresh and session_hint cookies on logout', async () => {
+    const login = await request(app.getHttpServer()).post('/auth/login').send({ email, password });
+    const cookie = extractCookie(login.headers['set-cookie'], 'refreshToken');
+
+    const res = await request(app.getHttpServer())
+      .post('/auth/logout')
+      .set('Cookie', cookie)
+      .set('Authorization', `Bearer ${login.body.accessToken}`)
+      .expect(204);
+
+    const cleared = res.headers['set-cookie'] as unknown as string[];
+    const clearedRefresh = cleared.find((c) => c.startsWith('refreshToken='));
+    const clearedHint = cleared.find((c) => c.startsWith('session_hint='));
+    expect(clearedRefresh).toMatch(/Expires=Thu, 01 Jan 1970/);
+    expect(clearedHint).toMatch(/Expires=Thu, 01 Jan 1970/);
   });
 });

@@ -13,6 +13,12 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { toUserResponse } from '../users/user-response.util.js';
 
 const REFRESH_COOKIE = 'refreshToken';
+// Deliberately NOT httpOnly and scoped to path '/' (not '/auth'): it carries
+// no secret, just "a session might exist". The web app's AuthProvider reads
+// it from document.cookie before ever calling /auth/refresh, so an
+// anonymous visitor or a bot never triggers a doomed refresh attempt (and
+// the 401 that would follow).
+const SESSION_HINT_COOKIE = 'session_hint';
 const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
 @ApiTags('auth')
@@ -40,6 +46,7 @@ export class AuthController {
     const user = await this.authService.validateCredentials(dto.email, dto.password);
     const tokens = await this.authService.issueTokens(user, this.requestMeta(req));
     this.setRefreshCookie(res, tokens);
+    this.setSessionHintCookie(res, tokens);
     return { accessToken: tokens.accessToken, user: toUserResponse(user, true) };
   }
 
@@ -53,6 +60,7 @@ export class AuthController {
     }
     const { tokens } = await this.authService.refresh(rawToken, this.requestMeta(req));
     this.setRefreshCookie(res, tokens);
+    this.setSessionHintCookie(res, tokens);
     return { accessToken: tokens.accessToken };
   }
 
@@ -63,7 +71,8 @@ export class AuthController {
     if (rawToken) {
       await this.authService.logout(rawToken);
     }
-    res.clearCookie(REFRESH_COOKIE, { path: '/auth' });
+    res.clearCookie(REFRESH_COOKIE, { path: '/auth', domain: this.cookieDomain() });
+    res.clearCookie(SESSION_HINT_COOKIE, { path: '/', domain: this.cookieDomain() });
   }
 
   @Get('me')
@@ -82,10 +91,32 @@ export class AuthController {
   private setRefreshCookie(res: Response, tokens: IssuedTokens) {
     res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
+      secure: this.isProduction(),
       sameSite: 'lax',
       expires: tokens.refreshExpiresAt,
       path: '/auth',
+      domain: this.cookieDomain(),
     });
+  }
+
+  private setSessionHintCookie(res: Response, tokens: IssuedTokens) {
+    res.cookie(SESSION_HINT_COOKIE, '1', {
+      httpOnly: false,
+      secure: this.isProduction(),
+      sameSite: 'lax',
+      expires: tokens.refreshExpiresAt,
+      path: '/',
+      domain: this.cookieDomain(),
+    });
+  }
+
+  private isProduction(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
+  }
+
+  // Empty/unset = host-only cookie (fine for local dev, where api/web share
+  // the "localhost" hostname). See env.validation.ts for the production case.
+  private cookieDomain(): string | undefined {
+    return this.configService.get<string>('COOKIE_DOMAIN') || undefined;
   }
 }

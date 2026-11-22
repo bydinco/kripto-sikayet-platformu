@@ -23,6 +23,19 @@ const LOCK_NAME = 'kripto-sikayet-auth-refresh';
 const BROADCAST_CHANNEL_NAME = 'kripto-sikayet-auth-refresh';
 const AUTO_REFRESH_INTERVAL_MS = 12 * 60 * 1000; // access token lives 15 min
 
+// Set by the API (non-httpOnly, path=/) on login/refresh, cleared on
+// logout — see apps/api/src/auth/auth.controller.ts. Carries no secret,
+// just "a session might exist"; checking it first means an anonymous
+// visitor or a bot never triggers a doomed /auth/refresh call (and the 401
+// that follows).
+export function hasSessionHint(): boolean {
+  try {
+    return document.cookie.split('; ').some((c) => c === 'session_hint=1');
+  } catch {
+    return false;
+  }
+}
+
 async function doRawRefresh(): Promise<RefreshResult | null> {
   try {
     return await apiFetch<RefreshResult>('/auth/refresh', { method: 'POST', credentials: 'include' });
@@ -93,6 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (!hasSessionHint()) {
+      applySession(null, null);
+      return;
+    }
+
     const outcome = await refreshWithRetry<RefreshResult>(async () => {
       const data = await coordinatedRefresh();
       return { ok: data !== null, data: data ?? undefined };
