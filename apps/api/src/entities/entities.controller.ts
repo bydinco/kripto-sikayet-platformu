@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { EntityType, Role } from '@prisma/client';
 import { EntitiesService } from './entities.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
 import { UpdateEntityDto } from './dto/update-entity.dto.js';
@@ -24,8 +24,11 @@ export class EntitiesController {
 
   @Public()
   @Get()
-  findAll(@Query('q') q?: string) {
-    return this.entitiesService.findAll(q);
+  findAll(@Query('q') q?: string, @Query('type') type?: string) {
+    if (type && !Object.values(EntityType).includes(type as EntityType)) {
+      throw new BadRequestException(`Geçersiz tür: ${type}`);
+    }
+    return this.entitiesService.findAll(q, type as EntityType | undefined);
   }
 
   @Public()

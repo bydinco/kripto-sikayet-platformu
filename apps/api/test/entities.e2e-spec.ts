@@ -130,6 +130,15 @@ describe('Entities catalog panel (e2e)', () => {
       .expect(200);
   });
 
+  it('filters GET /entities by type, and rejects an invalid type with 400', async () => {
+    const coinId = await createEntity(editor.accessToken, 'typefilter-coin');
+    const res = await request(app.getHttpServer()).get('/entities?type=COIN').expect(200);
+    expect(res.body.map((e: { id: string }) => e.id)).toContain(coinId);
+    expect(res.body.every((e: { type: string }) => e.type === 'COIN')).toBe(true);
+
+    await request(app.getHttpServer()).get('/entities?type=NOT_A_TYPE').expect(400);
+  });
+
   it('404s deleting a link that does not belong to the given entity', async () => {
     const entityIdA = await createEntity(editor.accessToken, 'linkcross-a');
     const entityIdB = await createEntity(editor.accessToken, 'linkcross-b');

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { EntityType, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ScoringService } from '../scoring/scoring.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
@@ -23,9 +23,12 @@ export class EntitiesService {
     }
   }
 
-  findAll(q?: string) {
+  findAll(q?: string, type?: EntityType) {
     return this.prisma.entity.findMany({
-      where: q ? { name: { contains: q, mode: 'insensitive' } } : undefined,
+      where: {
+        ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
+        ...(type ? { type } : {}),
+      },
       orderBy: { name: 'asc' },
     });
   }
