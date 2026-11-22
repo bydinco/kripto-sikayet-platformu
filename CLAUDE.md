@@ -132,6 +132,34 @@ yanıtı, kanıt onay/ret, yeni `ContractAudit` (`POST
 pasifleştirme: `PATCH /scoring/models/:id` (ADMIN). Seed'deki v1 ağırlıkları
 taslaktır, kalibre edilmemiştir.
 
+## On-demand revalidation
+
+Web'de `POST /api/revalidate` (`apps/web/src/app/api/revalidate/route.ts`):
+`x-revalidate-secret` header'ı `REVALIDATE_SECRET`'a eşit olmalı (yoksa
+500/401); body `{ paths?, tags? }`. API tarafı: `RevalidateService`
+(`apps/api/src/revalidate/`) `${WEB_ORIGIN}/api/revalidate`'e POST atar,
+**hiçbir zaman throw etmez** (sadece loglar) — ana işlemi (rapor geçişi,
+model aktifleştirme, Notice kararı) asla bozmaz. `REVALIDATE_SECRET`
+ayarlı değilse sessizce no-op (yerel/e2e'de varsayılan budur — `.env.test`
+bilerek ayarlamaz).
+
+Tag/path eşlemesi (web sayfaları `next: { tags: [...] }` ile fetch eder):
+
+| Tag | Hangi sayfa(lar) | Ne zaman tetiklenir |
+| --- | --- | --- |
+| `report:<reportId>` | `/[locale]/reports/[id]` (tüm fetch'leri) | Rapor durum geçişi (özellikle REMOVED/RESTORE), çözüm onayı, o rapora bağlı Notice kararı |
+| `entity:<slug>` | `/[locale]/entities/[slug]` — sadece slug'a göre yapılan ilk varlık fetch'i (entityId henüz bilinmiyor) | `recomputeScore` sonrası |
+| `entity-id:<entityId>` | Varlık sayfasının entityId'ye göre alt fetch'leri (raporlar, skorlar) + rapor sayfasının skor fetch'i | `recomputeScore` sonrası, rapor durum geçişi, o varlığa bağlı Notice kararı |
+| `scoring` | Varlık sayfasının skor fetch'i, rapor sayfasının skor fetch'i, ana sayfanın "en yüksek risk" fetch'i | Model aktifleştirme/pasifleştirme (tek tag ile, tek tek varlık saymadan) |
+| `methodology` | `/[locale]/methodology` | Model aktifleştirme/pasifleştirme |
+| `home` | `/[locale]` (ana sayfa, tüm fetch'leri) | Rapor durum geçişi, model aktifleştirme/pasifleştirme |
+
+Bilinen sınırlama: Notice'ın `entityId`'si varsa sadece `entity-id:` tag'i
+kullanılır (slug bilinmediği için `entity:<slug>` tetiklenmez) — varlık
+sayfasının en üstteki (slug'a göre) fetch'i bu durumda kendi 600s
+revalidate penceresini bekler, alt fetch'ler (raporlar/skor) hemen
+güncellenir.
+
 ## Henüz yapılmayanlar
 
 - SIWE / cüzdan imzası doğrulaması

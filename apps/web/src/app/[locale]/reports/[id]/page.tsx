@@ -13,17 +13,24 @@ import { RiskMeter } from '../../../../components/risk-meter';
 import { ShareButton } from '../../../../components/share-button';
 import { ReportNoticeForm } from '../../../../components/report-notice-form';
 
+// Every fetch on this page is tagged by reportId — the API revalidates
+// this tag on every status transition, especially REMOVED/RESTORE (the
+// page flips between hidden/visible). See CLAUDE.md.
 async function getReport(id: string): Promise<ApiReport | null> {
   try {
-    return await apiFetch<ApiReport>(`/reports/${encodeURIComponent(id)}`, { next: { revalidate: 300 } });
+    return await apiFetch<ApiReport>(`/reports/${encodeURIComponent(id)}`, {
+      next: { revalidate: 300, tags: [`report:${id}`] },
+    });
   } catch {
     return null;
   }
 }
 
-async function getEntity(entityId: string): Promise<ApiEntity | null> {
+async function getEntity(reportId: string, entityId: string): Promise<ApiEntity | null> {
   try {
-    return await apiFetch<ApiEntity>(`/entities/${encodeURIComponent(entityId)}`, { next: { revalidate: 600 } });
+    return await apiFetch<ApiEntity>(`/entities/${encodeURIComponent(entityId)}`, {
+      next: { revalidate: 600, tags: [`report:${reportId}`] },
+    });
   } catch {
     return null;
   }
@@ -32,7 +39,7 @@ async function getEntity(entityId: string): Promise<ApiEntity | null> {
 async function getEvidence(reportId: string): Promise<ApiEvidence[]> {
   try {
     return await apiFetch<ApiEvidence[]>(`/evidence?reportId=${encodeURIComponent(reportId)}`, {
-      next: { revalidate: 300 },
+      next: { revalidate: 300, tags: [`report:${reportId}`] },
     });
   } catch {
     return [];
@@ -42,16 +49,18 @@ async function getEvidence(reportId: string): Promise<ApiEvidence[]> {
 async function getResponses(reportId: string): Promise<ApiEntityResponse[]> {
   try {
     return await apiFetch<ApiEntityResponse[]>(`/reports/${encodeURIComponent(reportId)}/responses`, {
-      next: { revalidate: 300 },
+      next: { revalidate: 300, tags: [`report:${reportId}`] },
     });
   } catch {
     return [];
   }
 }
 
-async function getLatestRiskScore(entityId: string): Promise<ApiRiskScore | null> {
+async function getLatestRiskScore(reportId: string, entityId: string): Promise<ApiRiskScore | null> {
   try {
-    const scores = await apiFetch<ApiRiskScore[]>(`/scoring?entityId=${entityId}`, { next: { revalidate: 300 } });
+    const scores = await apiFetch<ApiRiskScore[]>(`/scoring?entityId=${entityId}`, {
+      next: { revalidate: 300, tags: [`report:${reportId}`, `entity-id:${entityId}`, 'scoring'] },
+    });
     return scores[0] ?? null;
   } catch {
     return null;
@@ -92,11 +101,11 @@ export default async function ReportDetailPage({ params }: PageProps<'/[locale]/
   if (!report) notFound();
 
   const [entity, evidence, responses] = await Promise.all([
-    getEntity(report.entityId),
+    getEntity(report.id, report.entityId),
     getEvidence(report.id),
     getResponses(report.id),
   ]);
-  const riskScore = entity ? await getLatestRiskScore(entity.id) : null;
+  const riskScore = entity ? await getLatestRiskScore(report.id, entity.id) : null;
   const isDisputed = responses.some((r) => r.disputed);
 
   return (

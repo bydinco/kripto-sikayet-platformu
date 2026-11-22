@@ -6,9 +6,14 @@ import type { Locale } from '../../../lib/locale';
 import type { ApiRiskModel } from '../../../lib/api-models';
 import { humanizeEnum } from '../../../lib/format';
 
+// Tagged 'methodology' — the API revalidates this on model activate/
+// deactivate, which is exactly what this page needs to reflect immediately
+// rather than waiting out the 1h revalidate window. See CLAUDE.md.
 async function getActiveModels(): Promise<ApiRiskModel[]> {
   try {
-    return await apiFetch<ApiRiskModel[]>('/scoring/models/active', { next: { revalidate: 3600 } });
+    return await apiFetch<ApiRiskModel[]>('/scoring/models/active', {
+      next: { revalidate: 3600, tags: ['methodology'] },
+    });
   } catch {
     return [];
   }

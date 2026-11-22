@@ -13,6 +13,9 @@ export const envValidationSchema = Joi.object({
   // "example.com") so session_hint, set by the API, is also readable by
   // document.cookie on the web app's own subdomain.
   COOKIE_DOMAIN: Joi.string().optional().allow(''),
+  // Unset = on-demand revalidation is a no-op (RevalidateService logs and
+  // returns instead of calling the web app). See CLAUDE.md.
+  REVALIDATE_SECRET: Joi.string().optional().allow(''),
   JWT_ACCESS_SECRET: Joi.string().min(16).required(),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().positive().default(30),

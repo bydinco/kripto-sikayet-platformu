@@ -9,6 +9,7 @@ import { Role, ReportStatus, StatusActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EntityStatsService } from '../entities/entity-stats.service.js';
 import { ScoringService } from '../scoring/scoring.service.js';
+import { RevalidateService } from '../revalidate/revalidate.service.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { CONTENT_FIELDS, SATISFACTION_FIELDS, UpdateReportDto } from './dto/update-report.dto.js';
 import {
@@ -46,6 +47,7 @@ export class ReportsService {
     private readonly prisma: PrismaService,
     private readonly entityStats: EntityStatsService,
     private readonly scoring: ScoringService,
+    private readonly revalidate: RevalidateService,
   ) {}
 
   async create(dto: CreateReportDto, currentUser: JwtPayload) {
@@ -239,6 +241,7 @@ export class ReportsService {
 
     await this.entityStats.recomputeStats(report.entityId);
     await this.scoring.safeRecomputeScore(report.entityId);
+    await this.revalidate.revalidate({ tags: [`report:${id}`, `entity-id:${report.entityId}`, 'home'] });
     return updated;
   }
 
@@ -296,6 +299,10 @@ export class ReportsService {
 
     await this.entityStats.recomputeStats(report.entityId);
     await this.scoring.safeRecomputeScore(report.entityId);
+    // Especially REMOVED/RESTORE: the report's own page flips between
+    // hidden/visible, and it drops out of (or back into) the entity's
+    // report list and the homepage's recent-reports feed.
+    await this.revalidate.revalidate({ tags: [`report:${report.id}`, `entity-id:${report.entityId}`, 'home'] });
     return updated;
   }
 

@@ -17,9 +17,11 @@ export async function generateMetadata({ params }: PageProps<'/[locale]'>): Prom
   return buildMetadata({ locale: locale as Locale, path: '', title: dictionary.siteName, description: dictionary.home.tagline });
 }
 
+// Every fetch below is tagged 'home' — the API revalidates this tag on
+// report status transitions and model activate/deactivate. See CLAUDE.md.
 async function getRecentReports(): Promise<ApiReport[]> {
   try {
-    return await apiFetch<ApiReport[]>('/reports?take=10', { next: { revalidate: 600 } });
+    return await apiFetch<ApiReport[]>('/reports?take=10', { next: { revalidate: 600, tags: ['home'] } });
   } catch {
     return [];
   }
@@ -29,15 +31,17 @@ async function getRecentReports(): Promise<ApiReport[]> {
 // from the API, never a fabricated number.
 async function getPublicReportsForStats(): Promise<ApiReport[]> {
   try {
-    return await apiFetch<ApiReport[]>('/reports?take=50', { next: { revalidate: 600 } });
+    return await apiFetch<ApiReport[]>('/reports?take=50', { next: { revalidate: 600, tags: ['home'] } });
   } catch {
     return [];
   }
 }
 
+// take=50 matches GET /entities' own hard cap (see entities.service.ts) —
+// without it this would silently default to 20 and under-report.
 async function getEntityCount(): Promise<number> {
   try {
-    const entities = await apiFetch<ApiEntity[]>('/entities', { next: { revalidate: 600 } });
+    const entities = await apiFetch<ApiEntity[]>('/entities?take=50', { next: { revalidate: 600, tags: ['home'] } });
     return entities.length;
   } catch {
     return 0;
@@ -46,7 +50,9 @@ async function getEntityCount(): Promise<number> {
 
 async function getTopRiskScores(): Promise<ApiRiskScore[]> {
   try {
-    return await apiFetch<ApiRiskScore[]>('/scoring/top?take=6', { next: { revalidate: 300 } });
+    return await apiFetch<ApiRiskScore[]>('/scoring/top?take=6', {
+      next: { revalidate: 300, tags: ['home', 'scoring'] },
+    });
   } catch {
     return [];
   }

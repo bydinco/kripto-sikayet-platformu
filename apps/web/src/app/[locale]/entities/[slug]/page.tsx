@@ -15,17 +15,24 @@ type Tab = 'overview' | 'reports' | 'responses' | 'contract' | 'history';
 const TABS: Tab[] = ['overview', 'reports', 'responses', 'contract', 'history'];
 const PUBLIC_STATUSES: ReportStatus[] = ['PUBLISHED', 'DISPUTED', 'RESOLVED'];
 
+// Tagged by slug — known upfront from the route, unlike entityId (which
+// this very fetch resolves). The API revalidates this tag after
+// recomputeScore. See CLAUDE.md's "On-demand revalidation" section.
 async function getEntity(idOrSlug: string): Promise<ApiEntity | null> {
   try {
-    return await apiFetch<ApiEntity>(`/entities/${encodeURIComponent(idOrSlug)}`, { next: { revalidate: 600 } });
+    return await apiFetch<ApiEntity>(`/entities/${encodeURIComponent(idOrSlug)}`, {
+      next: { revalidate: 600, tags: [`entity:${idOrSlug}`] },
+    });
   } catch {
     return null;
   }
 }
 
-async function getEntityReports(entityId: string): Promise<ApiReport[]> {
+async function getEntityReports(slug: string, entityId: string): Promise<ApiReport[]> {
   try {
-    return await apiFetch<ApiReport[]>(`/reports?entityId=${entityId}&take=50`, { next: { revalidate: 600 } });
+    return await apiFetch<ApiReport[]>(`/reports?entityId=${entityId}&take=50`, {
+      next: { revalidate: 600, tags: [`entity:${slug}`, `entity-id:${entityId}`, 'home'] },
+    });
   } catch {
     return [];
   }
@@ -34,9 +41,13 @@ async function getEntityReports(entityId: string): Promise<ApiReport[]> {
 // Visibility is enforced server-side (apps/api ScoringService): a public,
 // unauthenticated fetch here only ever gets scores back whose model is
 // active. Ordered by computedAt desc — [0] is current, the rest is history.
-async function getRiskScores(entityId: string): Promise<ApiRiskScore[]> {
+// 'scoring' additionally lets a model activate/deactivate (which can touch
+// many entities at once) invalidate this without enumerating every one.
+async function getRiskScores(slug: string, entityId: string): Promise<ApiRiskScore[]> {
   try {
-    return await apiFetch<ApiRiskScore[]>(`/scoring?entityId=${entityId}`, { next: { revalidate: 300 } });
+    return await apiFetch<ApiRiskScore[]>(`/scoring?entityId=${entityId}`, {
+      next: { revalidate: 300, tags: [`entity:${slug}`, `entity-id:${entityId}`, 'scoring'] },
+    });
   } catch {
     return [];
   }
@@ -58,7 +69,7 @@ export async function generateMetadata({ params }: PageProps<'/[locale]/entities
     return buildMetadata({ locale, path: `/entities/${slug}`, title: dictionary.siteName, description: '', noindex: true });
   }
 
-  const reports = await getEntityReports(entity.id);
+  const reports = await getEntityReports(slug, entity.id);
   return buildMetadata({
     locale,
     path: `/entities/${entity.slug}`,
@@ -83,7 +94,10 @@ export default async function EntityDetailPage({
   const tab: Tab = TABS.includes(rawTab as Tab) ? (rawTab as Tab) : 'overview';
   const statusFilter = typeof resolvedSearchParams.status === 'string' ? (resolvedSearchParams.status as ReportStatus) : '';
 
-  const [reports, scores] = await Promise.all([getEntityReports(entity.id), getRiskScores(entity.id)]);
+  const [reports, scores] = await Promise.all([
+    getEntityReports(slug, entity.id),
+    getRiskScores(slug, entity.id),
+  ]);
   const riskScore = scores[0] ?? null;
   const filteredReports = statusFilter ? reports.filter((r) => r.status === statusFilter) : reports;
   const latestAudit = entity.coin?.audits[0] ?? null;

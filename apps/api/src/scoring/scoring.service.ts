@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Role, ReportStatus, WalletKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { RevalidateService } from '../revalidate/revalidate.service.js';
 import { CreateScoringDto } from './dto/create-scoring.dto.js';
 import { UpdateScoringDto } from './dto/update-scoring.dto.js';
 import { computeRiskScore, type RiskEngineInputs } from './risk-score-engine.js';
@@ -18,7 +19,10 @@ function isAdmin(currentUser?: JwtPayload): boolean {
 export class ScoringService {
   private readonly logger = new Logger(ScoringService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly revalidate: RevalidateService,
+  ) {}
 
   // Callers (report/response/evidence transitions, the recompute endpoint,
   // the cron job) should never have their own operation fail just because
@@ -126,6 +130,12 @@ export class ScoringService {
       await this.prisma.riskModel.update({ where: { id: modelId }, data: { active: false } });
     }
 
+    // Affects every entity of this type at once — too many to enumerate as
+    // paths, so this relies on the 'scoring' tag carried by entity pages'
+    // score fetches (see CLAUDE.md) plus the two pages that read the
+    // active-models list directly.
+    await this.revalidate.revalidate({ tags: ['methodology', 'home', 'scoring'] });
+
     return this.prisma.riskModel.findUnique({ where: { id: modelId }, include: { factors: true } });
   }
 
@@ -138,7 +148,7 @@ export class ScoringService {
   // Returns null (quiet no-op) when the entity doesn't exist or no model
   // is defined yet for its type, so callers can fire this blindly.
   async recomputeScore(entityId: string) {
-    const entity = await this.prisma.entity.findUnique({ where: { id: entityId }, select: { type: true } });
+    const entity = await this.prisma.entity.findUnique({ where: { id: entityId }, select: { type: true, slug: true } });
     if (!entity) return null;
 
     const model = await this.prisma.riskModel.findFirst({
@@ -154,7 +164,7 @@ export class ScoringService {
     const result = computeRiskScore(model, inputs);
     const factorIdByCode = new Map(model.factors.map((f) => [f.code, f.id]));
 
-    return this.prisma.riskScore.create({
+    const score = await this.prisma.riskScore.create({
       data: {
         entityId,
         modelId: model.id,
@@ -174,6 +184,13 @@ export class ScoringService {
       },
       include: { factors: { include: { factor: true } }, model: true },
     });
+
+    // Tagged by both slug (the by-slug fetch on the entity page, which
+    // doesn't know entityId upfront) and raw id (the sub-fetches scoped by
+    // entityId, which do) — see CLAUDE.md.
+    await this.revalidate.revalidate({ tags: [`entity:${entity.slug}`, `entity-id:${entityId}`] });
+
+    return score;
   }
 
   // Exported for unit testing in isolation from recomputeScore/persistence.
