@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { ModerationService } from './moderation.service.js';
@@ -18,8 +18,8 @@ export class ModerationController {
   }
 
   @Get()
-  findAll() {
-    return this.moderationService.findAll();
+  findAll(@Query('reportId') reportId?: string) {
+    return this.moderationService.findAll(reportId);
   }
 
   @Get(':id')

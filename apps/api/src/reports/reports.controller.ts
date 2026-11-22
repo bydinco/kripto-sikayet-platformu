@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { ReportStatus, Role } from '@prisma/client';
 import { ReportsService } from './reports.service.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { UpdateReportDto } from './dto/update-report.dto.js';
@@ -25,10 +25,12 @@ export class ReportsController {
     @CurrentUser() currentUser?: JwtPayload,
     @Query('entityId') entityId?: string,
     @Query('take') take?: string,
+    @Query('status') status?: string,
   ) {
     return this.reportsService.findAll(currentUser, {
       entityId,
       take: take ? Number(take) : undefined,
+      status: status ? this.parseStatusList(status) : undefined,
     });
   }
 
@@ -37,10 +39,23 @@ export class ReportsController {
     return this.reportsService.findMine(currentUser);
   }
 
+  // Moderation queue counts, e.g. { PENDING: 3, NEEDS_EVIDENCE: 1, ... }.
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @Get('status-counts')
+  statusCounts() {
+    return this.reportsService.statusCounts();
+  }
+
   @OptionalAuth()
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() currentUser?: JwtPayload) {
     return this.reportsService.findOne(id, currentUser);
+  }
+
+  @Roles(Role.ADMIN, Role.MODERATOR)
+  @Get(':id/status-history')
+  statusHistory(@Param('id') id: string) {
+    return this.reportsService.statusHistory(id);
   }
 
   @Patch(':id')
@@ -70,5 +85,16 @@ export class ReportsController {
   @Post(':id/resolution-approve')
   approveResolution(@Param('id') id: string, @CurrentUser() currentUser: JwtPayload) {
     return this.reportsService.approveResolution(id, currentUser);
+  }
+
+  private parseStatusList(raw: string): ReportStatus[] {
+    const values = raw.split(',').map((v) => v.trim());
+    const validValues = new Set<string>(Object.values(ReportStatus));
+    for (const value of values) {
+      if (!validValues.has(value)) {
+        throw new BadRequestException(`Geçersiz durum: ${value}`);
+      }
+    }
+    return values as ReportStatus[];
   }
 }

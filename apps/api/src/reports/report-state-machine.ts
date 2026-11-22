@@ -1,4 +1,4 @@
-import { ModerationAction, ReportStatus } from '@prisma/client';
+import { ModerationAction, ReportStatus, Role } from '@prisma/client';
 
 const { PENDING, NEEDS_EVIDENCE, PUBLISHED, DISPUTED, RESOLVED, REJECTED, REMOVED } = ReportStatus;
 
@@ -68,4 +68,11 @@ export function moderationActionFor(from: ReportStatus, to: ReportStatus): Moder
     throw new Error(`No ModerationAction mapped for transition: ${from} -> ${to}`);
   }
   return action;
+}
+
+// What the moderation UI should offer as the next-status options for a
+// given role: valid transitions from the current status, minus the
+// ADMIN-only ones when the caller isn't ADMIN.
+export function allowedTransitionsFor(from: ReportStatus, role: Role): ReportStatus[] {
+  return REPORT_TRANSITIONS[from].filter((to) => role === Role.ADMIN || !isAdminOnlyTransition(from, to));
 }

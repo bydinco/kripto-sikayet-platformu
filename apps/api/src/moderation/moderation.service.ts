@@ -11,8 +11,11 @@ export class ModerationService {
     return this.prisma.moderationLog.create({ data: createModerationDto });
   }
 
-  findAll() {
-    return this.prisma.moderationLog.findMany();
+  findAll(reportId?: string) {
+    return this.prisma.moderationLog.findMany({
+      where: reportId ? { reportId } : undefined,
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   findOne(id: string) {

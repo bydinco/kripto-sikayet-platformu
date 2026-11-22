@@ -11,6 +11,7 @@ import { EntityStatsService } from '../entities/entity-stats.service.js';
 import { CreateReportDto } from './dto/create-report.dto.js';
 import { CONTENT_FIELDS, SATISFACTION_FIELDS, UpdateReportDto } from './dto/update-report.dto.js';
 import {
+  allowedTransitionsFor,
   isAdminOnlyTransition,
   isPublicStatus,
   isValidTransition,
@@ -86,7 +87,7 @@ export class ReportsService {
     return this.prisma.report.create({ data: { ...dto, authorId: currentUser.sub } });
   }
 
-  findAll(currentUser?: JwtPayload, filters?: { entityId?: string; take?: number }) {
+  findAll(currentUser?: JwtPayload, filters?: { entityId?: string; take?: number; status?: ReportStatus[] }) {
     const requestedTake = filters?.take;
     const take = Math.min(Math.max(Number.isFinite(requestedTake) ? requestedTake! : 20, 1), 50);
     const orderBy = [
@@ -96,7 +97,11 @@ export class ReportsService {
     const entityWhere = filters?.entityId ? { entityId: filters.entityId } : {};
 
     if (currentUser && isModerator(currentUser.role)) {
-      return this.prisma.report.findMany({ where: entityWhere, orderBy, take });
+      // `status` filter is a moderation-queue convenience and only ever
+      // honored for MODERATOR/ADMIN; it never changes what a plain visitor
+      // or author can see below.
+      const statusWhere = filters?.status ? { status: { in: filters.status } } : {};
+      return this.prisma.report.findMany({ where: { ...entityWhere, ...statusWhere }, orderBy, take });
     }
     return this.prisma.report.findMany({
       where: {
@@ -111,6 +116,30 @@ export class ReportsService {
     });
   }
 
+  // MODERATOR/ADMIN only (enforced by the controller's @Roles). Powers the
+  // moderation queue's per-status counts without fetching every report.
+  async statusCounts(): Promise<Record<ReportStatus, number>> {
+    const grouped = await this.prisma.report.groupBy({ by: ['status'], _count: { _all: true } });
+    const counts = Object.fromEntries(Object.values(ReportStatus).map((status) => [status, 0])) as Record<
+      ReportStatus,
+      number
+    >;
+    for (const row of grouped) counts[row.status] = row._count._all;
+    return counts;
+  }
+
+  // MODERATOR/ADMIN only (enforced by the controller's @Roles).
+  async statusHistory(id: string) {
+    const report = await this.prisma.report.findUnique({ where: { id }, select: { id: true } });
+    if (!report) {
+      throw new NotFoundException('Şikayet bulunamadı.');
+    }
+    return this.prisma.reportStatusHistory.findMany({
+      where: { reportId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
   findMine(currentUser: JwtPayload) {
     return this.prisma.report.findMany({
       where: { authorId: currentUser.sub },
@@ -122,6 +151,9 @@ export class ReportsService {
     const report = await this.prisma.report.findUnique({ where: { id } });
     if (!report || !this.canView(report, currentUser)) {
       throw new NotFoundException('Şikayet bulunamadı.');
+    }
+    if (currentUser && isModerator(currentUser.role)) {
+      return { ...report, allowedTransitions: allowedTransitionsFor(report.status, currentUser.role) };
     }
     return report;
   }
