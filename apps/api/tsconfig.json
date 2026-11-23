@@ -18,6 +18,10 @@
     "skipLibCheck": true,
     "strict": true,
     "strictPropertyInitialization": false,
-    "types": ["vitest/globals", "node"]
+    // multer: not imported anywhere directly (Nest's FileInterceptor wraps
+    // it), but @types/multer's `declare global { namespace Express {...} }`
+    // augmentation (Express.Multer.File) is otherwise silently dropped by
+    // this restricted `types` list.
+    "types": ["vitest/globals", "node", "multer"]
   }
 }
