@@ -126,6 +126,11 @@ export interface Dictionary {
     fileSizeError: string;
     fileCountError: string;
     fileUploadFailed: string;
+    missingHintPrefix: string;
+    missingEntity: string;
+    missingTitle: string;
+    missingBody: string;
+    missingConsent: string;
     consentLabel: string;
     submit: string;
     submitting: string;

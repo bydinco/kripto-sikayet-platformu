@@ -6,6 +6,8 @@ import { useAuth } from '../lib/auth-context';
 import { apiFetch, apiUploadFile, ApiError } from '../lib/api-client';
 import type { ApiEntity, ApiEvidence, ApiReport, ReportCategory } from '../lib/api-models';
 import { humanizeEnum } from '../lib/format';
+import { isAcceptedImageFile, MAX_FILES, MAX_FILE_SIZE_BYTES } from '../lib/evidence-file-validation';
+import { getMissingReportFields, type MissingReportField } from '../lib/report-form-validation';
 import type { Dictionary } from '../dictionaries/types';
 import type { Locale } from '../lib/locale';
 
@@ -18,13 +20,6 @@ interface EvidenceRow {
   type: FormEvidenceType;
   value: string;
 }
-
-// Client-side pre-check only, mirroring the server's real rules
-// (EvidenceFileService) — the server re-validates from file content
-// regardless of what's reported here.
-const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-const MAX_FILES = 5;
 
 interface FileRow {
   key: string;
@@ -92,10 +87,19 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
       .catch(() => setEntities([]));
   }, [entityQuery, status]);
 
-  const canSubmit = useMemo(
-    () => Boolean(selectedEntity) && title.trim().length > 0 && body.trim().length > 0 && consent,
+  // File-upload status is deliberately NOT part of this — a file error
+  // must never block submitting the report itself (see handleSubmit).
+  const missingFields = useMemo(
+    () => getMissingReportFields({ hasEntity: Boolean(selectedEntity), title, body, consent }),
     [selectedEntity, title, body, consent],
   );
+  const canSubmit = missingFields.length === 0;
+  const missingFieldLabel: Record<MissingReportField, string> = {
+    entity: dictionary.reportForm.missingEntity,
+    title: dictionary.reportForm.missingTitle,
+    body: dictionary.reportForm.missingBody,
+    consent: dictionary.reportForm.missingConsent,
+  };
 
   function addEvidenceRow() {
     setEvidenceRows((rows) => [...rows, { key: crypto.randomUUID(), type: 'LINK', value: '' }]);
@@ -111,27 +115,31 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
 
   function addFiles(selected: FileList | null) {
     if (!selected || selected.length === 0) return;
-    setFileError(null);
 
-    setFileRows((rows) => {
-      const next = [...rows];
-      for (const file of Array.from(selected)) {
-        if (next.length >= MAX_FILES) {
-          setFileError(dictionary.reportForm.fileCountError);
-          break;
-        }
-        if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-          setFileError(dictionary.reportForm.fileTypeError);
-          continue;
-        }
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-          setFileError(dictionary.reportForm.fileSizeError);
-          continue;
-        }
-        next.push({ key: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), status: 'pending' });
+    // Computed from the current fileRows read directly (this always runs
+    // synchronously from the <input onChange>, never batched/stale), then
+    // applied in one setFileRows + one setFileError — not from inside a
+    // setFileRows updater, which would call setFileError as a side effect
+    // of what's supposed to be a pure updater function.
+    const next = [...fileRows];
+    let error: string | null = null;
+    for (const file of Array.from(selected)) {
+      if (next.length >= MAX_FILES) {
+        error = dictionary.reportForm.fileCountError;
+        break;
       }
-      return next;
-    });
+      if (!isAcceptedImageFile(file)) {
+        error = dictionary.reportForm.fileTypeError;
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        error = dictionary.reportForm.fileSizeError;
+        continue;
+      }
+      next.push({ key: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), status: 'pending' });
+    }
+    setFileRows(next);
+    setFileError(error);
   }
 
   function removeFileRow(key: string) {
@@ -371,7 +379,12 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
             id="evidence-files"
             className="input"
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            // Extensions alongside MIME types: some OS file-picker dialogs
+            // filter by MIME type using the system's own (sometimes stale
+            // or non-standard, e.g. legacy Windows .jpg registrations)
+            // association, which can hide .jpg files from the picker
+            // entirely if only "image/jpeg" is given.
+            accept="image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp"
             multiple
             disabled={fileRows.length >= MAX_FILES}
             onChange={(e) => {
@@ -450,6 +463,13 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
               <Link href={`/${locale}/reports/${error.existingReportId}`}>{dictionary.reportForm.viewReport}</Link>
             </>
           ) : null}
+        </p>
+      ) : null}
+
+      {missingFields.length > 0 ? (
+        <p className="muted" style={{ fontSize: '0.8125rem' }}>
+          {dictionary.reportForm.missingHintPrefix}
+          {missingFields.map((field) => missingFieldLabel[field]).join(', ')}
         </p>
       ) : null}
 
