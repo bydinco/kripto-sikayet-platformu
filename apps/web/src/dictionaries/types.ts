@@ -142,6 +142,16 @@ export interface Dictionary {
   categories: Record<ReportCategory, string>;
   evidenceTypes: Record<'TX_HASH' | 'WALLET_ADDRESS' | 'LINK', string>;
   riskLevels: Record<RiskLevel, string>;
+  market: {
+    attribution: string; // "Veri: CoinGecko"
+    disclaimer: string; // "Bilgi amaçlıdır, yatırım tavsiyesi değildir."
+    boxTitle: string;
+    priceLabel: string;
+    change24hLabel: string;
+    marketCapLabel: string;
+    updatedAtLabel: string;
+    unavailable: string;
+  };
   methodologyPage: {
     title: string;
     intro: string;
@@ -194,6 +204,8 @@ export interface Dictionary {
       summaryLabel: string;
       verifiedLabel: string;
       verifiedAdminOnly: string;
+      coingeckoIdLabel: string;
+      coingeckoIdHint: string;
       createButton: string;
       saveButton: string;
       linksTitle: string;

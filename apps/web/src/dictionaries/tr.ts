@@ -185,6 +185,16 @@ export const tr: Dictionary = {
     CRITICAL_SIGNAL: 'Kritik sinyal',
     INSUFFICIENT_DATA: 'Yetersiz veri',
   },
+  market: {
+    attribution: 'Veri: CoinGecko',
+    disclaimer: 'Bilgi amaçlıdır, yatırım tavsiyesi değildir.',
+    boxTitle: 'Piyasa',
+    priceLabel: 'Fiyat',
+    change24hLabel: '24s değişim',
+    marketCapLabel: 'Piyasa değeri',
+    updatedAtLabel: 'Güncellendi',
+    unavailable: 'Fiyat verisi mevcut değil',
+  },
   methodologyPage: {
     title: 'Yöntem',
     intro:
@@ -238,6 +248,8 @@ export const tr: Dictionary = {
       summaryLabel: 'Özet',
       verifiedLabel: 'Doğrulanmış (sadece sahiplik, risk skorunu etkilemez)',
       verifiedAdminOnly: 'Bunu sadece ADMIN değiştirebilir.',
+      coingeckoIdLabel: 'CoinGecko id',
+      coingeckoIdHint: 'Sadece canlı fiyat için kullanılır (örn. "bitcoin"). Risk skorunu asla etkilemez.',
       createButton: 'Oluştur',
       saveButton: 'Kaydet',
       linksTitle: 'Linkler',

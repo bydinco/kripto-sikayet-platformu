@@ -5,6 +5,7 @@ import { isSupportedLocale, SUPPORTED_LOCALES } from '../../lib/locale';
 import { SetHtmlLang } from '../../components/set-html-lang';
 import { SiteHeader } from '../../components/site-header';
 import { SiteFooter } from '../../components/site-footer';
+import { PriceTicker } from '../../components/price-ticker';
 
 export { SUPPORTED_LOCALES, type Locale } from '../../lib/locale';
 
@@ -23,6 +24,7 @@ export default async function LocaleLayout({ children, params }: LayoutProps<'/[
     <AuthProvider>
       <SetHtmlLang lang={locale} />
       <SiteHeader locale={locale} dictionary={dictionary} />
+      <PriceTicker locale={locale} dictionary={dictionary} />
       <main>{children}</main>
       <SiteFooter dictionary={dictionary} />
     </AuthProvider>

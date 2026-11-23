@@ -185,6 +185,16 @@ export const en: Dictionary = {
     CRITICAL_SIGNAL: 'Critical signal',
     INSUFFICIENT_DATA: 'Insufficient data',
   },
+  market: {
+    attribution: 'Data: CoinGecko',
+    disclaimer: 'For information only, not investment advice.',
+    boxTitle: 'Market',
+    priceLabel: 'Price',
+    change24hLabel: '24h change',
+    marketCapLabel: 'Market cap',
+    updatedAtLabel: 'Updated',
+    unavailable: 'Price data unavailable',
+  },
   methodologyPage: {
     title: 'Methodology',
     intro:
@@ -238,6 +248,8 @@ export const en: Dictionary = {
       summaryLabel: 'Summary',
       verifiedLabel: 'Verified (ownership only, never affects risk score)',
       verifiedAdminOnly: 'Only ADMIN can change this.',
+      coingeckoIdLabel: 'CoinGecko id',
+      coingeckoIdHint: 'Used only to look up the live price (e.g. "bitcoin"). Never affects the risk score.',
       createButton: 'Create',
       saveButton: 'Save',
       linksTitle: 'Links',

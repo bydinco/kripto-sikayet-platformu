@@ -113,6 +113,7 @@ function EditBody({ id, accessToken, dictionary }: { id: string; accessToken: st
   const [slug, setSlug] = useState('');
   const [summary, setSummary] = useState('');
   const [verified, setVerified] = useState(false);
+  const [coingeckoId, setCoingeckoId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -124,6 +125,7 @@ function EditBody({ id, accessToken, dictionary }: { id: string; accessToken: st
     setSlug(res.slug);
     setSummary(res.summary ?? '');
     setVerified(res.verified);
+    setCoingeckoId(res.coin?.coingeckoId ?? '');
   }, [id]);
 
   useEffect(() => {
@@ -140,6 +142,7 @@ function EditBody({ id, accessToken, dictionary }: { id: string; accessToken: st
     try {
       const body: Record<string, unknown> = { name, type, slug, summary: summary.trim() || undefined };
       if (isAdmin) body.verified = verified;
+      if (type === 'COIN') body.coingeckoId = coingeckoId.trim();
       const updated = await apiFetch<ApiEntity>(`/entities/${id}`, { method: 'PATCH', accessToken, body });
       setEntity(updated);
     } catch (err) {
@@ -177,6 +180,21 @@ function EditBody({ id, accessToken, dictionary }: { id: string; accessToken: st
           <label htmlFor="summary">{dictionary.admin.entities.summaryLabel}</label>
           <textarea id="summary" className="textarea" value={summary} onChange={(e) => setSummary(e.target.value)} />
         </div>
+        {type === 'COIN' ? (
+          <div className="field">
+            <label htmlFor="coingeckoId">{dictionary.admin.entities.coingeckoIdLabel}</label>
+            <input
+              id="coingeckoId"
+              className="input"
+              placeholder="bitcoin"
+              value={coingeckoId}
+              onChange={(e) => setCoingeckoId(e.target.value)}
+            />
+            <span className="muted" style={{ fontSize: '0.8125rem' }}>
+              {dictionary.admin.entities.coingeckoIdHint}
+            </span>
+          </div>
+        ) : null}
         <div className="field">
           <label htmlFor="verified" className="row" style={{ cursor: isAdmin ? 'pointer' : 'default' }}>
             <input

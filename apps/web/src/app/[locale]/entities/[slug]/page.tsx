@@ -5,8 +5,8 @@ import { apiFetch } from '../../../../lib/api-client';
 import { buildMetadata } from '../../../../lib/seo';
 import { getDictionary } from '../../../../dictionaries/get-dictionary';
 import type { Locale } from '../../../../lib/locale';
-import type { ApiEntity, ApiReport, ApiRiskScore, ReportStatus } from '../../../../lib/api-models';
-import { formatDate, formatPercent, humanizeEnum } from '../../../../lib/format';
+import type { ApiEntity, ApiMarketPrice, ApiReport, ApiRiskScore, ReportStatus } from '../../../../lib/api-models';
+import { formatCompactUsd, formatDate, formatPercent, formatPriceChangePercent, formatUsd, humanizeEnum } from '../../../../lib/format';
 import { StatusBadge } from '../../../../components/status-badge';
 import { RiskMeter } from '../../../../components/risk-meter';
 import { Pill } from '../../../../components/pill';
@@ -53,6 +53,19 @@ async function getRiskScores(slug: string, entityId: string): Promise<ApiRiskSco
   }
 }
 
+// Time-based ISR only, same as the price ticker — not tagged for
+// on-demand revalidation (the price feed runs on its own clock).
+type ResolvedMarketPrice = ApiMarketPrice & { price: number };
+
+async function getMarketPrice(slug: string): Promise<ResolvedMarketPrice | null> {
+  try {
+    const price = await apiFetch<ApiMarketPrice>(`/market/prices/${encodeURIComponent(slug)}`, { next: { revalidate: 120 } });
+    return price.price === null ? null : (price as ResolvedMarketPrice);
+  } catch {
+    return null;
+  }
+}
+
 function levelPillVariant(level: ApiRiskScore['level']): 'co' | 'wa' | 'ok' | 'ne' {
   if (level === 'CRITICAL_SIGNAL') return 'co';
   if (level === 'HIGH_RISK_SIGNAL') return 'wa';
@@ -94,9 +107,10 @@ export default async function EntityDetailPage({
   const tab: Tab = TABS.includes(rawTab as Tab) ? (rawTab as Tab) : 'overview';
   const statusFilter = typeof resolvedSearchParams.status === 'string' ? (resolvedSearchParams.status as ReportStatus) : '';
 
-  const [reports, scores] = await Promise.all([
+  const [reports, scores, marketPrice] = await Promise.all([
     getEntityReports(slug, entity.id),
     getRiskScores(slug, entity.id),
+    entity.type === 'COIN' ? getMarketPrice(slug) : Promise.resolve(null),
   ]);
   const riskScore = scores[0] ?? null;
   const filteredReports = statusFilter ? reports.filter((r) => r.status === statusFilter) : reports;
@@ -313,6 +327,47 @@ export default async function EntityDetailPage({
               {dictionary.entityDetail.disclaimer}
             </p>
           </div>
+
+          {marketPrice ? (
+            <div className="card stack">
+              <h2>{dictionary.market.boxTitle}</h2>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="muted">{dictionary.market.priceLabel}</span>
+                <span className="numeric">{formatUsd(marketPrice.price, locale)}</span>
+              </div>
+              {marketPrice.change24h !== null ? (
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <span className="muted">{dictionary.market.change24hLabel}</span>
+                  <span className={marketPrice.change24h >= 0 ? 'price-change-up' : 'price-change-down'}>
+                    {formatPriceChangePercent(marketPrice.change24h, locale)}
+                  </span>
+                </div>
+              ) : null}
+              {marketPrice.marketCap !== null ? (
+                <div className="row" style={{ justifyContent: 'space-between' }}>
+                  <span className="muted">{dictionary.market.marketCapLabel}</span>
+                  <span>{formatCompactUsd(marketPrice.marketCap, locale)}</span>
+                </div>
+              ) : null}
+              {marketPrice.updatedAt ? (
+                <span className="muted" style={{ fontSize: '0.8125rem' }}>
+                  {dictionary.market.updatedAtLabel}: {formatDate(marketPrice.updatedAt, locale)}
+                </span>
+              ) : null}
+              <a
+                href="https://www.coingecko.com"
+                target="_blank"
+                rel="nofollow noopener noreferrer"
+                className="muted"
+                style={{ fontSize: '0.75rem' }}
+              >
+                {dictionary.market.attribution}
+              </a>
+              <p className="muted" style={{ fontSize: '0.75rem' }}>
+                {dictionary.market.disclaimer}
+              </p>
+            </div>
+          ) : null}
 
           <div className="stack">
             <Link href={`/${locale}/reports/new`} className="button" style={{ display: 'block', textAlign: 'center' }}>

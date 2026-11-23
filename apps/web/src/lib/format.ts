@@ -36,3 +36,34 @@ export function formatDate(value: string, locale: string): string {
     return value;
   }
 }
+
+// Sub-$1 coins lose all meaningful precision at 2 decimals — give them more.
+export function formatUsd(value: number, locale: string): string {
+  try {
+    const maximumFractionDigits = Math.abs(value) < 1 ? 6 : 2;
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', maximumFractionDigits }).format(value);
+  } catch {
+    return `$${value}`;
+  }
+}
+
+// Market cap — compact notation ($1.2B) instead of a long digit string.
+export function formatCompactUsd(value: number, locale: string): string {
+  try {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(
+      value,
+    );
+  } catch {
+    return `$${value}`;
+  }
+}
+
+// CoinGecko's change24h is already a percentage number (5 means 5%, not
+// 0.05) — Intl's percent style wants a fraction, hence the /100.
+export function formatPriceChangePercent(value: number, locale: string): string {
+  try {
+    return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 2, signDisplay: 'exceptZero' }).format(value / 100);
+  } catch {
+    return `${value > 0 ? '+' : ''}${value}%`;
+  }
+}

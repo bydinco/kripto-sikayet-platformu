@@ -285,6 +285,58 @@ main {
   flex-wrap: wrap;
 }
 
+/* Price ticker — CSS-only horizontal scroll, no JS. Deliberately NOT
+   styled with the risk pills (.pill-ok/.pill-co): a price going up/down is
+   a market fact, not a risk signal, and must stay visually distinct from
+   risk-level coloring. */
+.price-ticker {
+  border-bottom: 1px solid var(--ln);
+  background: var(--s1);
+}
+
+.price-ticker-inner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  overflow-x: auto;
+  padding: 8px 16px;
+  scrollbar-width: thin;
+}
+
+.price-ticker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  color: var(--tx);
+}
+
+.price-ticker-item:hover {
+  text-decoration: none;
+  color: var(--ac);
+}
+
+.price-ticker-symbol {
+  font-weight: 600;
+}
+
+.price-ticker-attribution {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 16px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.price-change-up {
+  color: var(--grn);
+}
+
+.price-change-down {
+  color: var(--cor);
+}
+
 .site-footer {
   border-top: 1px solid var(--ln);
   padding: 24px 0;

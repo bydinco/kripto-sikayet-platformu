@@ -159,6 +159,33 @@ revalidate'den önce Entity'den `slug` sorgulanır, böylece hem `entity-id:`
 hem `entity:<slug>` tag'i aynı anda tetiklenir — varlık sayfasının ne üst
 (slug'a göre) fetch'i ne de alt fetch'leri 600s'lik pencereyi beklemez.
 
+## Piyasa fiyat verisi (CoinGecko)
+
+**⚠️ Yayına çıkmadan önce CoinGecko'nun plan/kullanım koşullarını kontrol
+et** — bu özellik ücretsiz Demo API'ye karşı yazıldı, ticari kullanım
+koşulları bu depoda hiç doğrulanmadı.
+
+Fiyat **risk skoruna hiç girmez** (`RiskEngineInputs`'ta fiyat alanı yok,
+bkz. `risk-score-engine.spec.ts`'teki type-level test) — tamamen bilgi
+amaçlı. Tek bir sunucu tarafı iş (`apps/api/src/market/
+market-price-refresh.service.ts`) her `MARKET_REFRESH_INTERVAL_SECONDS`
+(varsayılan 120sn) `/coins/markets`'ı tüm `Entity.status=ACTIVE` +
+`Coin.coingeckoId` dolu coinler için TOPLU çeker, sonucu Redis'te tek bir
+JSON snapshot olarak tutar (`MarketCache`, `market:prices:v1`); çoklu
+instance'ta çift çalışmaya karşı Redis `SET NX PX` kilidi
+(`market:refresh:lock`). 429/ağ hatasında eski veri korunur. Ziyaretçi
+başına CoinGecko'ya istek **atılmaz**. `COINGECKO_API_KEY` boşsa özellik
+tamamen kapalı: iş hiç çalışmaz, `GET /market/prices[/:entitySlug]` hep
+boş/stale döner — sahte veri asla üretilmez. `MARKET_STALE_THRESHOLD_MINUTES`
+(varsayılan 15) aşılan snapshot gizlenir. `NODE_ENV=test` iken periyodik
+zamanlayıcı hiç başlamaz (testler `refreshNow()`'ı doğrudan çağırır).
+
+`Coin.coingeckoId` ADMIN/EDITOR tarafından `PATCH /entities/:id` ile
+düzenlenebilir (Coin profili yoksa sessizce no-op — profil oluşturma API'si
+hâlâ yok, bkz. `recordContractAudit`). Web: `SiteHeader` altındaki fiyat
+bandı ve varlık sayfasındaki "Piyasa" kutusu CoinGecko atıfı + yatırım
+tavsiyesi olmadığı notunu taşır; ikisi de veri yoksa hiç render edilmez.
+
 ## Henüz yapılmayanlar
 
 - SIWE / cüzdan imzası doğrulaması
