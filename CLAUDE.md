@@ -186,9 +186,47 @@ hâlâ yok, bkz. `recordContractAudit`). Web: `SiteHeader` altındaki fiyat
 bandı ve varlık sayfasındaki "Piyasa" kutusu CoinGecko atıfı + yatırım
 tavsiyesi olmadığı notunu taşır; ikisi de veri yoksa hiç render edilmez.
 
+## Kanıt dosyası depolama (ekran görüntüsü yükleme)
+
+`apps/api/src/storage/` arkasındaki `StorageProvider` arayüzü (`put`,
+`getObject`, `delete`) iki driver'dan birine bağlanır (`STORAGE_DRIVER`
+env'i): `local` (dev/test, `STORAGE_LOCAL_DIR` altında — web'in `public`
+klasörü dışında, `.gitignore`'da) veya `s3` (Hetzner Object Storage/R2
+gibi S3-uyumlu, `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`).
+**S3 driver'ı bu depoda hiç gerçek anahtarla/bucket'la test edilmedi** —
+`s3-storage.provider.spec.ts` SDK client'ını mock'lar; prod'a çıkmadan
+önce gerçek bir bucketla doğrulanmalı ve bucket **mutlaka özel (private)**
+olmalı, asla herkese açık okuma izni verilmemeli.
+
+Akış (`apps/api/src/evidence/files/`): `POST
+/reports/:reportId/evidence/files` (multipart, tek dosya, sadece rapor
+yazarı, sadece PENDING/NEEDS_EVIDENCE, rapor başına en fazla 5 dosya,
+kullanıcı başına günlük kota) → tür dosya içeriğinden tespit edilir
+(`file-type`, uzantı/Content-Type'a hiç güvenilmez) ve sadece PNG/JPEG/
+WebP kabul edilir → `sharp` ile yeniden kodlanır (tüm EXIF/GPS metadata
+ve polyglot/gömülü içerik silinir, `recode-image.ts`) → depolamaya
+yazılır → `Evidence` satırı (`storageKey`/`mimeType`/`sizeBytes`/
+`sha256`) oluşturulur. DB yazımı başarısız olursa depolanan dosya
+silinir; depolama başarısız olursa hiç satır oluşturulmaz.
+`storageKey` her zaman sunucu tarafında üretilir (`evidence/<uuid>.<ext>`
+, `evidence-storage-key.ts`), kullanıcı dosya adından asla türetilmez.
+
+`GET /evidence/:id/file` yetki kuralı (`evidence-file-access.service.ts`):
+yazar/MODERATOR/ADMIN her zaman; başka herkes (anonim dahil) yalnızca
+kanıt onaylı VE rapor herkese açık durumdaysa — aksi halde **404**
+(mevcut `GET /evidence/:id` metadata uç noktası aynı durumda 403 döner;
+dosya uç noktası bilerek 404'e çevirir, kanıtın varlığını hiç sızdırmaz).
+Local driver'da dosya doğrudan akıtılır; S3'te 60 saniyelik imzalı URL'e
+302 yönlendirilir. Moderatör onaysız bir dosyayı görüntülediğinde
+`ModerationLog`'a `VIEW_EVIDENCE` kaydı düşülür.
+
+v1 kapsamı: sadece statik görüntü (PNG/JPEG/WebP), dosya başına 5 MB.
+**PDF ve video desteklenmiyor**, **virüs taraması yok** (ClamAV entegrasyonu
+sonraki bir iş — bkz. "Henüz yapılmayanlar").
+
 ## Henüz yapılmayanlar
 
 - SIWE / cüzdan imzası doğrulaması
-- Dosya yükleme (Evidence.fileUrl alanı var, yükleme akışı yok)
+- Kanıt dosyası yüklemede virüs taraması (ClamAV) — PDF/video desteği de yok
 - E-posta doğrulama gönderimi/kontrolü
 - Ödeme (Plan/Subscription şeması var, entegrasyon yok)
