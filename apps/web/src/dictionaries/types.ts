@@ -96,6 +96,8 @@ export interface Dictionary {
     timelineCreated: string;
     timelinePublished: string;
     timelineResolved: string;
+    fileAlt: string;
+    viewLarger: string;
   };
   reportForm: {
     title: string;
@@ -115,7 +117,15 @@ export interface Dictionary {
     removeEvidence: string;
     evidenceTypeLabel: string;
     evidenceValueLabel: string;
-    fileUploadComingSoon: string;
+    fileFieldLabel: string;
+    fileHint: string;
+    fileRemove: string;
+    fileUploading: string;
+    fileRetry: string;
+    fileTypeError: string;
+    fileSizeError: string;
+    fileCountError: string;
+    fileUploadFailed: string;
     consentLabel: string;
     submit: string;
     submitting: string;
@@ -175,6 +185,8 @@ export interface Dictionary {
       unapprovedBadge: string;
       approveButton: string;
       rejectButton: string;
+      filePreviewAlt: string;
+      filePreviewUnavailable: string;
       responsesTitle: string;
       noResponses: string;
       timelineTitle: string;

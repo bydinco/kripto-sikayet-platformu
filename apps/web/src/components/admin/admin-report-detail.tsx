@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { apiFetch, ApiError } from '../../lib/api-client';
+import { apiFetch, apiFetchBlob, ApiError } from '../../lib/api-client';
 import type {
   ApiEntityResponse,
   ApiEvidence,
@@ -31,6 +31,46 @@ function isSafeHttpUrl(value: string): boolean {
 interface TimelineEntry {
   createdAt: string;
   detail: string;
+}
+
+// GET /evidence/:id/file needs an Authorization header for unapproved
+// evidence (e.g. before the report is published), which a plain <img src>
+// can't send — fetched as a Blob and rendered via a local object URL.
+function EvidenceFilePreview({
+  evidenceId,
+  accessToken,
+  dictionary,
+}: {
+  evidenceId: string;
+  accessToken: string;
+  dictionary: Dictionary;
+}) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let currentUrl: string | null = null;
+    apiFetchBlob(`/evidence/${evidenceId}/file`, accessToken)
+      .then((blob) => {
+        currentUrl = URL.createObjectURL(blob);
+        setObjectUrl(currentUrl);
+      })
+      .catch(() => setFailed(true));
+    return () => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
+  }, [evidenceId, accessToken]);
+
+  if (failed) return <p className="muted">{dictionary.admin.reportDetail.filePreviewUnavailable}</p>;
+  if (!objectUrl) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- blob: object URL, not a remote/optimizable asset
+    <img
+      src={objectUrl}
+      alt={dictionary.admin.reportDetail.filePreviewAlt}
+      style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, display: 'block' }}
+    />
+  );
 }
 
 function Body({
@@ -131,7 +171,9 @@ function Body({
           <div key={item.id} className="card row" style={{ justifyContent: 'space-between' }}>
             <span>
               <span className="muted">{item.type}</span>{' '}
-              {item.type === 'LINK' && item.value && isSafeHttpUrl(item.value) ? (
+              {item.type === 'SCREENSHOT' && item.storageKey ? (
+                <EvidenceFilePreview evidenceId={item.id} accessToken={accessToken} dictionary={dictionary} />
+              ) : item.type === 'LINK' && item.value && isSafeHttpUrl(item.value) ? (
                 <a href={item.value} target="_blank" rel="ugc nofollow noopener noreferrer">
                   {item.value}
                 </a>

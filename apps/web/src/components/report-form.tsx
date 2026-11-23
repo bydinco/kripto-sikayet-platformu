@@ -1,22 +1,37 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../lib/auth-context';
-import { apiFetch, ApiError } from '../lib/api-client';
-import type { ApiEntity, ApiReport, ReportCategory } from '../lib/api-models';
+import { apiFetch, apiUploadFile, ApiError } from '../lib/api-client';
+import type { ApiEntity, ApiEvidence, ApiReport, ReportCategory } from '../lib/api-models';
 import { humanizeEnum } from '../lib/format';
 import type { Dictionary } from '../dictionaries/types';
 import type { Locale } from '../lib/locale';
 
-// File-upload evidence types (SCREENSHOT/DOCUMENT/...) aren't supported by
-// this form yet, so only these three are offered.
+// Text/link evidence types this form offers directly; screenshots go
+// through the separate file picker below (type SCREENSHOT, server-assigned).
 type FormEvidenceType = 'TX_HASH' | 'WALLET_ADDRESS' | 'LINK';
 
 interface EvidenceRow {
   key: string;
   type: FormEvidenceType;
   value: string;
+}
+
+// Client-side pre-check only, mirroring the server's real rules
+// (EvidenceFileService) — the server re-validates from file content
+// regardless of what's reported here.
+const ALLOWED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_FILES = 5;
+
+interface FileRow {
+  key: string;
+  file: File;
+  previewUrl: string;
+  status: 'pending' | 'uploading' | 'done' | 'error';
+  error?: string;
 }
 
 interface SubmitError {
@@ -48,11 +63,27 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
   const [lossUsd, setLossUsd] = useState('');
   const [incidentAt, setIncidentAt] = useState('');
   const [evidenceRows, setEvidenceRows] = useState<EvidenceRow[]>([]);
+  const [fileRows, setFileRows] = useState<FileRow[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
 
   const [error, setError] = useState<SubmitError | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [createdReport, setCreatedReport] = useState<ApiReport | null>(null);
+
+  // Revoke every object URL on unmount — removeFileRow revokes its own as
+  // files are removed one at a time, this is only the final cleanup. Reads
+  // from a ref kept in sync with fileRows so the unmount cleanup sees the
+  // latest list, not whatever it was when the effect first ran.
+  const fileRowsRef = useRef<FileRow[]>(fileRows);
+  useEffect(() => {
+    fileRowsRef.current = fileRows;
+  }, [fileRows]);
+  useEffect(() => {
+    return () => {
+      for (const row of fileRowsRef.current) URL.revokeObjectURL(row.previewUrl);
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -76,6 +107,57 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
 
   function removeEvidenceRow(key: string) {
     setEvidenceRows((rows) => rows.filter((row) => row.key !== key));
+  }
+
+  function addFiles(selected: FileList | null) {
+    if (!selected || selected.length === 0) return;
+    setFileError(null);
+
+    setFileRows((rows) => {
+      const next = [...rows];
+      for (const file of Array.from(selected)) {
+        if (next.length >= MAX_FILES) {
+          setFileError(dictionary.reportForm.fileCountError);
+          break;
+        }
+        if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+          setFileError(dictionary.reportForm.fileTypeError);
+          continue;
+        }
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+          setFileError(dictionary.reportForm.fileSizeError);
+          continue;
+        }
+        next.push({ key: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), status: 'pending' });
+      }
+      return next;
+    });
+  }
+
+  function removeFileRow(key: string) {
+    setFileRows((rows) => {
+      const row = rows.find((r) => r.key === key);
+      if (row) URL.revokeObjectURL(row.previewUrl);
+      return rows.filter((r) => r.key !== key);
+    });
+  }
+
+  async function uploadFileRow(reportId: string, row: FileRow) {
+    setFileRows((rows) => rows.map((r) => (r.key === row.key ? { ...r, status: 'uploading', error: undefined } : r)));
+    try {
+      await apiUploadFile<ApiEvidence>(`/reports/${reportId}/evidence/files`, row.file, accessToken!);
+      setFileRows((rows) => rows.map((r) => (r.key === row.key ? { ...r, status: 'done' } : r)));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : dictionary.reportForm.fileUploadFailed;
+      setFileRows((rows) => rows.map((r) => (r.key === row.key ? { ...r, status: 'error', error: message } : r)));
+    }
+  }
+
+  async function uploadPendingFiles(reportId: string, rows: FileRow[]) {
+    for (const row of rows) {
+      if (row.status === 'done') continue;
+      await uploadFileRow(reportId, row);
+    }
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -115,6 +197,12 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
         });
       }
 
+      // A file-upload failure must not undo report creation — it never
+      // throws (see uploadFileRow), so it can't reach the catch below. The
+      // success view keeps the file rows visible with a retry button for
+      // anything that didn't make it.
+      await uploadPendingFiles(report.id, fileRows);
+
       setCreatedReport(report);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409 && err.body?.existingReportId) {
@@ -143,9 +231,28 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
   }
 
   if (createdReport) {
+    const failedFiles = fileRows.filter((row) => row.status === 'error');
     return (
       <div className="card stack">
         <p>{dictionary.reportForm.success}</p>
+        {failedFiles.length > 0 ? (
+          <div className="stack">
+            {failedFiles.map((row) => (
+              <div key={row.key} className="row" style={{ justifyContent: 'space-between' }}>
+                <span className="error-text">
+                  {row.file.name}: {row.error}
+                </span>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => void uploadFileRow(createdReport.id, row)}
+                >
+                  {dictionary.reportForm.fileRetry}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <Link href={`/${locale}/reports/${createdReport.id}`} className="button">
           {dictionary.reportForm.viewReport}
         </Link>
@@ -257,7 +364,47 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
 
       <div className="card stack">
         <h2>{dictionary.reportForm.step3Title}</h2>
-        <p className="muted" style={{ fontSize: '0.8125rem' }}>{dictionary.reportForm.fileUploadComingSoon}</p>
+
+        <div className="field">
+          <label htmlFor="evidence-files">{dictionary.reportForm.fileFieldLabel}</label>
+          <input
+            id="evidence-files"
+            className="input"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            disabled={fileRows.length >= MAX_FILES}
+            onChange={(e) => {
+              addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <p className="muted" style={{ fontSize: '0.8125rem' }}>{dictionary.reportForm.fileHint}</p>
+        </div>
+
+        {fileRows.map((row) => (
+          <div key={row.key} className="row" style={{ background: 'var(--s2)', padding: 12, borderRadius: 8 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- local blob: preview, not a remote/optimizable image */}
+            <img
+              src={row.previewUrl}
+              alt={row.file.name}
+              style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }}
+            />
+            <span style={{ flex: 1 }}>{row.file.name}</span>
+            {row.status === 'uploading' ? <span className="muted">{dictionary.reportForm.fileUploading}</span> : null}
+            {row.status === 'error' ? <span className="error-text">{row.error}</span> : null}
+            <button
+              type="button"
+              className="button button-secondary"
+              disabled={row.status === 'uploading'}
+              onClick={() => removeFileRow(row.key)}
+            >
+              {dictionary.reportForm.fileRemove}
+            </button>
+          </div>
+        ))}
+        {fileError ? <p className="error-text">{fileError}</p> : null}
+
         {evidenceRows.map((row) => (
           <div key={row.key} className="row" style={{ background: 'var(--s2)', padding: 12, borderRadius: 8 }}>
             <select

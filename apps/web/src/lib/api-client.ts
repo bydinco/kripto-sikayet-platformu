@@ -13,6 +13,20 @@ export class ApiError extends Error {
   }
 }
 
+async function throwApiError(response: Response): Promise<never> {
+  let parsedBody: ApiErrorBody | undefined;
+  try {
+    parsedBody = await response.json();
+  } catch {
+    // No JSON body (e.g. a plain 500) — fall through with no parsed body.
+  }
+  const rawMessage = parsedBody?.message;
+  const message = Array.isArray(rawMessage)
+    ? rawMessage.join(', ')
+    : rawMessage ?? `İstek başarısız oldu (${response.status}).`;
+  throw new ApiError(response.status, message, parsedBody);
+}
+
 export interface ApiFetchOptions extends Omit<RequestInit, 'body'> {
   accessToken?: string;
   body?: unknown;
@@ -37,21 +51,49 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   });
 
   if (!response.ok) {
-    let parsedBody: ApiErrorBody | undefined;
-    try {
-      parsedBody = await response.json();
-    } catch {
-      // No JSON body (e.g. a plain 500) — fall through with no parsed body.
-    }
-    const rawMessage = parsedBody?.message;
-    const message = Array.isArray(rawMessage)
-      ? rawMessage.join(', ')
-      : rawMessage ?? `İstek başarısız oldu (${response.status}).`;
-    throw new ApiError(response.status, message, parsedBody);
+    await throwApiError(response);
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
   return (await response.json()) as T;
+}
+
+// Multipart upload (evidence screenshots) — deliberately not apiFetch: the
+// browser must set its own multipart boundary in Content-Type, so FormData
+// is sent as-is rather than JSON-stringified.
+export async function apiUploadFile<T>(path: string, file: File, accessToken: string): Promise<T> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    await throwApiError(response);
+  }
+  return (await response.json()) as T;
+}
+
+// GET /evidence/:id/file requires auth headers for non-public evidence,
+// which an <img src> can't send — fetched as a Blob and rendered via a
+// local object URL instead (see EvidenceFilePreview).
+export async function apiFetchBlob(path: string, accessToken?: string): Promise<Blob> {
+  const response = await fetch(`${API_URL}${path}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  });
+  if (!response.ok) {
+    await throwApiError(response);
+  }
+  return response.blob();
+}
+
+// Public, unauthenticated URL for an approved evidence file on a publicly
+// visible report — safe to use directly as an <img src>, no JS required.
+export function evidenceFileUrl(evidenceId: string): string {
+  return `${API_URL}/evidence/${encodeURIComponent(evidenceId)}/file`;
 }

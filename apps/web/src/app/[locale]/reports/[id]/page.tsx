@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { apiFetch } from '../../../../lib/api-client';
+import { apiFetch, evidenceFileUrl } from '../../../../lib/api-client';
 import { buildMetadata } from '../../../../lib/seo';
 import { getDictionary } from '../../../../dictionaries/get-dictionary';
 import type { Locale } from '../../../../lib/locale';
@@ -158,27 +158,48 @@ export default async function ReportDetailPage({ params }: PageProps<'/[locale]/
             {evidence.length === 0 ? (
               <p className="muted">{dictionary.reportDetail.noEvidence}</p>
             ) : (
-              evidence.map((item) => (
-                <div key={item.id} className="card row" style={{ justifyContent: 'space-between' }}>
-                  <span>
-                    <span className="muted">{dictionary.evidenceTypes[item.type as 'TX_HASH' | 'WALLET_ADDRESS' | 'LINK'] ?? item.type}</span>{' '}
-                    {item.type === 'LINK' && item.value && isSafeHttpUrl(item.value) ? (
-                      <a href={item.value} target="_blank" rel="ugc nofollow noopener noreferrer">
-                        {item.value}
-                      </a>
-                    ) : (
-                      <span className={item.type === 'TX_HASH' || item.type === 'WALLET_ADDRESS' ? 'mono' : undefined}>
-                        {item.value}
-                      </span>
-                    )}
-                  </span>
-                  {item.type === 'TX_HASH' || item.type === 'WALLET_ADDRESS' ? (
-                    <Pill variant={item.verifiedOnChain ? 'ok' : 'ne'}>
-                      {item.verifiedOnChain ? dictionary.reportDetail.chainVerifiedLabel : dictionary.reportDetail.notVerifiedLabel}
-                    </Pill>
-                  ) : null}
-                </div>
-              ))
+              evidence.map((item) =>
+                item.type === 'SCREENSHOT' && item.storageKey ? (
+                  // Plain <a>/<img> — no JS needed to open the full-size
+                  // file. The API only ever returns approved evidence on a
+                  // publicly visible report to this anonymous fetch.
+                  <a
+                    key={item.id}
+                    href={evidenceFileUrl(item.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="card"
+                    title={dictionary.reportDetail.viewLarger}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- API-hosted file, not a local/optimizable asset */}
+                    <img
+                      src={evidenceFileUrl(item.id)}
+                      alt={dictionary.reportDetail.fileAlt}
+                      style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 8, display: 'block' }}
+                    />
+                  </a>
+                ) : (
+                  <div key={item.id} className="card row" style={{ justifyContent: 'space-between' }}>
+                    <span>
+                      <span className="muted">{dictionary.evidenceTypes[item.type as 'TX_HASH' | 'WALLET_ADDRESS' | 'LINK'] ?? item.type}</span>{' '}
+                      {item.type === 'LINK' && item.value && isSafeHttpUrl(item.value) ? (
+                        <a href={item.value} target="_blank" rel="ugc nofollow noopener noreferrer">
+                          {item.value}
+                        </a>
+                      ) : (
+                        <span className={item.type === 'TX_HASH' || item.type === 'WALLET_ADDRESS' ? 'mono' : undefined}>
+                          {item.value}
+                        </span>
+                      )}
+                    </span>
+                    {item.type === 'TX_HASH' || item.type === 'WALLET_ADDRESS' ? (
+                      <Pill variant={item.verifiedOnChain ? 'ok' : 'ne'}>
+                        {item.verifiedOnChain ? dictionary.reportDetail.chainVerifiedLabel : dictionary.reportDetail.notVerifiedLabel}
+                      </Pill>
+                    ) : null}
+                  </div>
+                ),
+              )
             )}
           </div>
 

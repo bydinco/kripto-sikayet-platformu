@@ -298,6 +298,13 @@ export interface ApiEvidence {
   type: EvidenceType;
   value: string | null;
   fileUrl: string | null;
+  // Set only for uploaded file evidence (type SCREENSHOT). The file itself
+  // is never fetched from these fields directly — use evidenceFileUrl(id)
+  // or GET /evidence/:id/file, which enforce visibility.
+  storageKey: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  sha256: string | null;
   chainId: string | null;
   verifiedOnChain: boolean;
   approved: boolean;
