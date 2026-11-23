@@ -11,3 +11,8 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .pnpm-store/
+
+# Local evidence-file storage driver (dev/test only — never committed,
+# never served from apps/web's public folder). See apps/api/.env.example.
+storage-local/
+storage-local-test/

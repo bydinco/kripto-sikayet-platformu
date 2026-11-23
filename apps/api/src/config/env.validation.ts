@@ -27,4 +27,34 @@ export const envValidationSchema = Joi.object({
   COINGECKO_BASE_URL: Joi.string().uri().default('https://api.coingecko.com/api/v3'),
   MARKET_REFRESH_INTERVAL_SECONDS: Joi.number().integer().positive().default(120),
   MARKET_STALE_THRESHOLD_MINUTES: Joi.number().integer().positive().default(15),
+
+  // Evidence file storage (see CLAUDE.md "Kanıt dosyası depolama"). "local"
+  // writes under STORAGE_LOCAL_DIR (dev/test, outside the web app's public
+  // folder); "s3" targets an S3-compatible bucket (Hetzner Object Storage,
+  // R2) and requires the S3_* fields below.
+  STORAGE_DRIVER: Joi.string().valid('local', 's3').default('local'),
+  STORAGE_LOCAL_DIR: Joi.string().default('./storage-local'),
+  S3_ENDPOINT: Joi.string()
+    .uri()
+    .when('STORAGE_DRIVER', { is: 's3', then: Joi.required(), otherwise: Joi.optional().allow('') }),
+  S3_BUCKET: Joi.string().when('STORAGE_DRIVER', {
+    is: 's3',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  S3_REGION: Joi.string().when('STORAGE_DRIVER', {
+    is: 's3',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  S3_ACCESS_KEY_ID: Joi.string().when('STORAGE_DRIVER', {
+    is: 's3',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
+  S3_SECRET_ACCESS_KEY: Joi.string().when('STORAGE_DRIVER', {
+    is: 's3',
+    then: Joi.required(),
+    otherwise: Joi.optional().allow(''),
+  }),
 });

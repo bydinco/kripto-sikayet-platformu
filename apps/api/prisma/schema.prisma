@@ -144,6 +144,9 @@ enum ModerationAction {
   RESTORE
   FLAG_LEGAL
   EDIT
+  // A moderator/admin opened an unapproved evidence file (GET
+  // /evidence/:id/file) — audit trail for viewing not-yet-public content.
+  VIEW_EVIDENCE
 }
 
 enum NoticeType {
@@ -607,19 +610,33 @@ model Report {
 }
 
 model Evidence {
-  id              String       @id @default(cuid())
-  reportId        String
-  report          Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  type            EvidenceType
-  value           String?
-  fileUrl         String?
+  id       String       @id @default(cuid())
+  reportId String
+  report   Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  type     EvidenceType
+  value    String?
+  // Deprecated, unused by the upload flow (see CLAUDE.md "Kanıt dosya
+  // yükleme") — kept only so historical rows with a legacy value aren't
+  // dropped. New file evidence uses storageKey/mimeType/sizeBytes/sha256.
+  fileUrl  String?
+
+  // Set only for uploaded file evidence (type SCREENSHOT via
+  // POST /reports/:reportId/evidence/files). storageKey is a random,
+  // unguessable key the StorageProvider uses to locate the object — never
+  // derived from the user's filename. mimeType is server-detected from
+  // file content, not trusted client input.
+  storageKey String?
+  mimeType   String?
+  sizeBytes  Int?
+  sha256     String?
+
   chainId         String?
-  chain           Chain?       @relation(fields: [chainId], references: [id])
-  verifiedOnChain Boolean      @default(false)
+  chain           Chain?   @relation(fields: [chainId], references: [id])
+  verifiedOnChain Boolean  @default(false)
   // false when the author adds evidence to an already-PUBLISHED/DISPUTED
   // report: hidden from the public until a moderator approves it.
-  approved        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
+  approved        Boolean  @default(true)
+  createdAt       DateTime @default(now())
 
   @@index([reportId])
   @@index([value])
