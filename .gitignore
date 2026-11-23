@@ -16,3 +16,8 @@ coverage/
 # never served from apps/web's public folder). See apps/api/.env.example.
 storage-local/
 storage-local-test/
+
+# Playwright smoke suite (e2e-smoke/) run artifacts — never committed.
+/test-results/
+/playwright-report/
+/blob-report/

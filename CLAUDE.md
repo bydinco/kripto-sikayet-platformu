@@ -5,6 +5,67 @@ hibrit: şikayet/yanıt/çözüm akışı + kanıt zorunluluğu + risk skoru). �
 kararları ve tam veritabanı şeması için bkz. proje notları
 (`kripto-sikayet-platformu-notlar.md`, bu depo dışında).
 
+## Çalışma kuralları
+
+Bir görev "bitti" sayılmadan önce şunların hepsi yeşil olmalı:
+
+- `pnpm lint` (tüm paketler + `e2e-smoke/`)
+- `pnpm run typecheck`
+- `pnpm test` (tüm paketlerin birim testleri)
+- `pnpm --filter api test:e2e`
+- `pnpm build` (tüm paketler)
+- `pnpm test:smoke` (bkz. "Duman testleri (Playwright)")
+
+Bunlardan biri çalıştırılmadıysa veya kırmızıysa görev bitmemiş kabul
+edilir — "muhtemelen çalışır" yeterli değildir.
+
+Test silinmez, `.skip`'lenmez, yorum satırına alınmaz veya gevşetilmez
+(`--max-warnings` artırmak, bir assertion'ı zayıflatmak vb.) sırf
+geçsin diye; bir test kırmızıysa kök nedeni düzeltilir. Bunun tek
+istisnası: kullanıcının kendisi açıkça bir testin kaldırılmasını/
+atlanmasını istemesi.
+
+Arayüzü (web) etkileyen her değişiklik gerçek bir tarayıcıda denenir
+(Claude in Chrome bağlıysa onunla, değilse en azından Playwright duman
+testlerinin sürdüğü gerçek akışla — bkz. aşağıdaki bölüm); "derlendi/
+typecheck geçti, o yüzden çalışıyor" tek başına yeterli değildir.
+
+## Duman testleri (Playwright)
+
+`e2e-smoke/` — kalıcı, tek komutla çalışan duman testi paketi:
+`pnpm test:smoke` (kök dizinden). Kapsadığı akışlar: ana sayfa, kayıt/
+giriş, şikayet formu (varlık ara/seç, kanıt ekle, `.jpg`/`.jpeg`/`.JPG`/
+`.png` dosya yükleme, onay kutusu, gönder), moderatör incelemesi ve
+yayınlama, anonim kullanıcı için yayınlanmış rapor + onaylı görsel,
+onaysız dosyanın anonim için 404 vermesi, varlık sayfası.
+
+- **Sadece ayrılmış test veritabanını (port 5435) kullanır, dev DB'ye
+  (5434) hiç dokunmaz.** `playwright.config.ts`'in `webServer` adımı
+  önce `apps/api/test/smoke-reset.ts`'i çalıştırır (aynı guarded
+  `assertTestDatabaseUrl`/`truncateAllTables` — bkz. "e2e testleri"
+  bölümü — artı `prisma/seed.ts`), sonra API'yi `NODE_ENV=test` ile
+  başlatır.
+- Her spec `e2e-smoke/fixtures.ts`'teki `test`/`watchPage`'i kullanır:
+  **herhangi bir konsol hatası veya beklenmeyen 4xx/5xx yanıtı testi
+  otomatik olarak başarısız eder** — her spec'in kendi başına bunu
+  kurması gerekmez. Bu paketteki tek bilinçli 4xx (onaysız dosya), sayfa
+  gezintisi/kaynak yüklemesi üzerinden değil, doğrudan `request.get(...)`
+  ile kontrol edilir — o yüzden bu kurala hiç dokunmaz.
+- `reuseExistingServer: false` kasıtlı: 3001/3002 portlarında halihazırda
+  bir şey çalışıyorsa (örn. elle başlatılmış `pnpm dev:api`/`dev:web`)
+  suit o sunucuya **asla** bağlanmaz, port çatışmasıyla gürültülü
+  başarısız olur — sessizce yanlış (dev) sunucuya/veritabanına karşı
+  çalışmaktan daha iyidir.
+- `apps/api/src/main.ts` artık `app.module.ts`'teki
+  `NODE_ENV === 'test' ? '.env.test' : '.env'` seçimini birebir
+  yansıtıyor (önceden koşulsuz `import 'dotenv/config'` her zaman dev
+  `.env`'i önce yüklüyordu ve dotenv zaten set edilmiş değişkenleri asla
+  override etmediği için `.env.test`'in sonradan yüklenmesi sessizce
+  hiçbir şey değiştirmiyordu). Bu, sadece vitest üzerinden `AppModule`'ü
+  doğrudan import eden mevcut e2e paketinde hiç görünmeyen, gerçek
+  sunucuyu (`nest start`) `NODE_ENV=test` ile çalıştırdığında ortaya
+  çıkan gerçek bir hataydı — duman testi tam da bunun için değerli.
+
 ## Yığın ve klasör yapısı
 
 ```
@@ -28,9 +89,11 @@ pnpm dev:api     # http://localhost:3001 (Swagger: /api/docs)
 pnpm dev:web     # http://localhost:3002
 
 pnpm build       # tüm paketler
-pnpm lint        # tüm paketler
+pnpm lint        # tüm paketler + e2e-smoke/
+pnpm run typecheck
 pnpm test        # tüm paketler (vitest)
 pnpm --filter api test:e2e
+pnpm test:smoke  # Playwright duman testi — bkz. "Duman testleri (Playwright)"
 pnpm prisma:validate
 pnpm prisma:migrate
 ```
