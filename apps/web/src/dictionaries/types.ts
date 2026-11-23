@@ -107,6 +107,7 @@ export interface Dictionary {
     entityLabel: string;
     entitySearchPlaceholder: string;
     noEntitySelected: string;
+    noEntityResults: string;
     categoryLabel: string;
     titleLabel: string;
     bodyLabel: string;

@@ -115,6 +115,7 @@ export const tr: Dictionary = {
     entityLabel: 'Varlık',
     entitySearchPlaceholder: 'Coin, borsa… ara',
     noEntitySelected: 'Varlık seçilmedi',
+    noEntityResults: 'Varlık bulunamadı. Farklı bir arama deneyin.',
     categoryLabel: 'Kategori',
     titleLabel: 'Başlık',
     bodyLabel: 'Açıklama',

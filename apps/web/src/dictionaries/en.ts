@@ -115,6 +115,7 @@ export const en: Dictionary = {
     entityLabel: 'Entity',
     entitySearchPlaceholder: 'Search for a coin, exchange…',
     noEntitySelected: 'No entity selected',
+    noEntityResults: 'No entities found. Try a different search.',
     categoryLabel: 'Category',
     titleLabel: 'Title',
     bodyLabel: 'Description',

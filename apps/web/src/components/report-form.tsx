@@ -51,6 +51,15 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
   const [entities, setEntities] = useState<ApiEntity[]>([]);
   const [entityQuery, setEntityQuery] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<ApiEntity | null>(null);
+  // Set to true by the search input's own onChange (an event handler, not
+  // an effect body) and back to false once the matching response lands —
+  // only used to avoid flashing "no results" before the first response
+  // for the current query has arrived.
+  const [entitySearchLoading, setEntitySearchLoading] = useState(false);
+  // Tracks the query the latest-fired request is for, so an earlier,
+  // slower request that resolves after a newer one can't clobber it with
+  // stale results (there's no debounce — every keystroke fires a fetch).
+  const latestEntityQueryRef = useRef('');
 
   const [category, setCategory] = useState<ReportCategory>('OTHER');
   const [title, setTitle] = useState('');
@@ -82,9 +91,19 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
 
   useEffect(() => {
     if (status !== 'authenticated') return;
+    const queryAtRequestTime = entityQuery;
+    latestEntityQueryRef.current = entityQuery;
     apiFetch<ApiEntity[]>(`/entities${entityQuery ? `?q=${encodeURIComponent(entityQuery)}` : ''}`)
-      .then(setEntities)
-      .catch(() => setEntities([]));
+      .then((result) => {
+        if (latestEntityQueryRef.current !== queryAtRequestTime) return; // superseded by a newer query
+        setEntities(result);
+        setEntitySearchLoading(false);
+      })
+      .catch(() => {
+        if (latestEntityQueryRef.current !== queryAtRequestTime) return;
+        setEntities([]);
+        setEntitySearchLoading(false);
+      });
   }, [entityQuery, status]);
 
   // File-upload status is deliberately NOT part of this — a file error
@@ -284,6 +303,7 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
             onChange={(e) => {
               setSelectedEntity(null);
               setEntityQuery(e.target.value);
+              if (e.target.value) setEntitySearchLoading(true);
             }}
             placeholder={dictionary.reportForm.entitySearchPlaceholder}
           />
@@ -305,7 +325,13 @@ export function ReportForm({ locale, dictionary }: { locale: Locale; dictionary:
               ))}
             </div>
           ) : null}
-          {!selectedEntity ? <p className="muted">{dictionary.reportForm.noEntitySelected}</p> : null}
+          {/* Distinct from "nothing searched yet" below — otherwise a
+              search with zero matches looks identical to one that was
+              never run, and selection looks broken rather than empty. */}
+          {!selectedEntity && entityQuery && !entitySearchLoading && entities.length === 0 ? (
+            <p className="muted">{dictionary.reportForm.noEntityResults}</p>
+          ) : null}
+          {!selectedEntity && !entityQuery ? <p className="muted">{dictionary.reportForm.noEntitySelected}</p> : null}
         </div>
       </div>
 
