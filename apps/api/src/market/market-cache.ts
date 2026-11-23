@@ -1,6 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 // Thin, failure-tolerant wrapper around the Redis client used to hold the
 // single market-price snapshot and the refresh job's cross-instance lock.
@@ -16,7 +16,7 @@ export class MarketCache implements OnModuleDestroy {
   constructor(config: ConfigService) {
     const url = config.get<string>('REDIS_URL');
     this.client = url ? new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 }) : null;
-    this.client?.on('error', (error) => this.logger.warn(`Redis bağlantı hatası: ${error.message}`));
+    this.client?.on('error', (error: Error) => this.logger.warn(`Redis bağlantı hatası: ${error.message}`));
   }
 
   onModuleDestroy(): void {

@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { MarketPriceRefreshService } from '../src/market/market-price-refresh.service.js';
 import { MARKET_CACHE_KEY } from '../src/market/market.constants.js';
