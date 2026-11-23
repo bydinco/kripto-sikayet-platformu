@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { EvidenceService } from './evidence.service.js';
+import { EvidenceFileAccessService } from './files/evidence-file-access.service.js';
 import { CreateEvidenceDto } from './dto/create-evidence.dto.js';
 import { UpdateEvidenceDto } from './dto/update-evidence.dto.js';
 import { OptionalAuth } from '../common/decorators/optional-auth.decorator.js';
@@ -10,7 +12,10 @@ import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 @ApiTags('evidence')
 @Controller('evidence')
 export class EvidenceController {
-  constructor(private readonly evidenceService: EvidenceService) {}
+  constructor(
+    private readonly evidenceService: EvidenceService,
+    private readonly evidenceFileAccess: EvidenceFileAccessService,
+  ) {}
 
   @Post()
   create(@Body() createEvidenceDto: CreateEvidenceDto, @CurrentUser() currentUser: JwtPayload) {
@@ -27,6 +32,28 @@ export class EvidenceController {
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() currentUser?: JwtPayload) {
     return this.evidenceService.findOne(id, currentUser);
+  }
+
+  // Unlike GET /evidence/:id (403 for the metadata), this returns 404 for
+  // anyone not allowed to see the file — never reveals that a non-public
+  // evidence row exists (see CLAUDE.md "Kanıt dosyası yükleme").
+  @OptionalAuth()
+  @Get(':id/file')
+  async getFile(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtPayload | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { storageObject, mimeType, isPublic } = await this.evidenceFileAccess.getFile(id, currentUser);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', isPublic ? 'public, max-age=3600' : 'no-store');
+
+    if (storageObject.kind === 'redirect') {
+      res.redirect(302, storageObject.url);
+      return;
+    }
+    res.setHeader('Content-Type', mimeType);
+    storageObject.stream.pipe(res);
   }
 
   @Patch(':id')
