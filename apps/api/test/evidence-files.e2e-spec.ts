@@ -217,7 +217,7 @@ describe('Evidence file upload (e2e)', () => {
       expect(log).toBeTruthy();
     });
 
-    it('200s anonymous for approved evidence on a publicly visible report', async () => {
+    it('200s anonymous for approved evidence on a publicly visible report, with a short public Cache-Control', async () => {
       const reportId = await createPendingReport(await createEntity());
       const uploaded = await uploadFile(reportId, author.accessToken, pngBuffer).expect(201);
       await request(app.getHttpServer())
@@ -226,10 +226,30 @@ describe('Evidence file upload (e2e)', () => {
         .send({ status: 'PUBLISHED', reason: 'ok' })
         .expect(200);
 
-      await getBinary(app.getHttpServer(), `/evidence/${uploaded.body.id}/file`).expect(200);
+      const res = await getBinary(app.getHttpServer(), `/evidence/${uploaded.body.id}/file`).expect(200);
+      // Must stay short — a downstream cache/browser should never keep
+      // serving a 200 for long after the report could go REMOVED or the
+      // evidence unapproved. No `immutable`, no long max-age.
+      const cacheControl = res.headers['cache-control'] as string;
+      expect(cacheControl).toMatch(/^public, max-age=\d+$/);
+      const maxAge = Number(cacheControl.match(/max-age=(\d+)/)![1]);
+      expect(maxAge).toBeGreaterThan(0);
+      expect(maxAge).toBeLessThanOrEqual(300);
+      expect(cacheControl).not.toContain('immutable');
     });
 
-    it('404s anonymous for approved evidence once the report is REMOVED', async () => {
+    it('sends Cache-Control: no-store for a non-public file (e.g. the author viewing their own pre-publication upload)', async () => {
+      const reportId = await createPendingReport(await createEntity());
+      const uploaded = await uploadFile(reportId, author.accessToken, pngBuffer).expect(201);
+      const res = await getBinary(
+        app.getHttpServer(),
+        `/evidence/${uploaded.body.id}/file`,
+        author.accessToken,
+      ).expect(200);
+      expect(res.headers['cache-control']).toBe('no-store');
+    });
+
+    it('flips from 200 to 404 for anonymous the instant the report is REMOVED — no app-level caching delay', async () => {
       const reportId = await createPendingReport(await createEntity());
       const uploaded = await uploadFile(reportId, author.accessToken, pngBuffer).expect(201);
       await request(app.getHttpServer())
@@ -237,6 +257,10 @@ describe('Evidence file upload (e2e)', () => {
         .set('Authorization', `Bearer ${moderator.accessToken}`)
         .send({ status: 'PUBLISHED', reason: 'ok' })
         .expect(200);
+
+      // Proves the flip is live, not "was always 404": confirm 200 first.
+      await getBinary(app.getHttpServer(), `/evidence/${uploaded.body.id}/file`).expect(200);
+
       await request(app.getHttpServer())
         .patch(`/reports/${reportId}`)
         .set('Authorization', `Bearer ${moderator.accessToken}`)

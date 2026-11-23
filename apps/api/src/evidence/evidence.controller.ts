@@ -46,7 +46,12 @@ export class EvidenceController {
   ): Promise<void> {
     const { storageObject, mimeType, isPublic } = await this.evidenceFileAccess.getFile(id, currentUser);
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', isPublic ? 'public, max-age=3600' : 'no-store');
+    // Short on purpose: a report can go REMOVED (or evidence unapproved)
+    // at any time, and this bounds how long a downstream cache/browser can
+    // keep serving a 200 after that — matches the S3 driver's signed-URL
+    // TTL (see STORAGE_PROVIDER), so both drivers share the same staleness
+    // window regardless of which one is active.
+    res.setHeader('Cache-Control', isPublic ? 'public, max-age=60' : 'no-store');
 
     if (storageObject.kind === 'redirect') {
       res.redirect(302, storageObject.url);
