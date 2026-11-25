@@ -15,6 +15,7 @@
     "typecheck": "pnpm --filter api exec tsc --noEmit -p tsconfig.build.json && pnpm --filter web exec tsc --noEmit && tsc --noEmit -p e2e-smoke/tsconfig.json",
     "test": "pnpm -r test",
     "test:smoke": "playwright test --config=e2e-smoke/playwright.config.ts",
+    "test:smoke:prod": "playwright test --config=e2e-smoke/playwright.config.prod.ts",
     "prisma:validate": "pnpm --filter api exec prisma validate",
     "prisma:migrate": "pnpm --filter api exec prisma migrate dev",
     "prisma:deploy": "pnpm --filter api exec prisma migrate deploy"

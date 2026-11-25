@@ -6,13 +6,21 @@ export interface SecurityHeader {
 // entity.logoUrl exists in the API response type but is never rendered as
 // an <img> anywhere in this app (grepped src/ — zero matches), so img-src
 // doesn't need to allow arbitrary https: hosts, just 'self' + data: + the
-// API origin (evidence images, loaded via evidenceFileUrl()).
+// API origin (evidence images, loaded via evidenceFileUrl()) + blob: —
+// confirmed by a real production-build browser run (pnpm test:smoke:prod)
+// that without blob:, the browser refuses to render the two client-side
+// URL.createObjectURL() previews in this app (report-form.tsx's selected-
+// file thumbnails before upload, admin-report-detail.tsx's fetched-blob
+// evidence preview) with "Refused to load ... violates ... img-src".
+// blob: URLs here are always generated client-side from an already-
+// fetched/local Blob, never a remote load, so this doesn't widen the
+// policy to any new network-loadable source.
 function buildCsp(apiOrigin: string): string {
   return [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: ${apiOrigin}`,
+    `img-src 'self' data: blob: ${apiOrigin}`,
     "font-src 'self'",
     `connect-src 'self' ${apiOrigin}`,
     "frame-ancestors 'none'",

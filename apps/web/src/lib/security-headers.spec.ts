@@ -29,6 +29,12 @@ describe('buildSecurityHeaders', () => {
     expect(csp).not.toContain('upgrade-insecure-requests');
   });
 
+  it('allows blob: in img-src (client-side URL.createObjectURL previews — report-form.tsx, admin-report-detail.tsx)', () => {
+    const headers = buildSecurityHeaders('production', 'https://api.example.com', false);
+    const csp = header(headers, 'Content-Security-Policy')?.value;
+    expect(csp).toContain("img-src 'self' data: blob: https://api.example.com");
+  });
+
   it('omits Strict-Transport-Security when not served over HTTPS (local dev, smoke tests)', () => {
     const headers = buildSecurityHeaders('production', 'http://localhost:3001', false);
     expect(header(headers, 'Strict-Transport-Security')).toBeUndefined();

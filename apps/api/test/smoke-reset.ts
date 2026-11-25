@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { config } from 'dotenv';
 import { assertTestDatabaseUrl, truncateAllTables } from './reset-test-db.js';
+import { waitForPostgres } from './wait-for-postgres.js';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -19,6 +20,8 @@ async function main() {
 
   const url = process.env.DATABASE_URL;
   assertTestDatabaseUrl(url);
+
+  await waitForPostgres(url);
 
   console.log(`[smoke] Test şeması güncelleniyor (migrate deploy): ${url}`);
   execSync('pnpm exec prisma migrate deploy', {
