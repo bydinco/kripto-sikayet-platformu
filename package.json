@@ -16,7 +16,8 @@
     "test": "pnpm -r test",
     "test:smoke": "playwright test --config=e2e-smoke/playwright.config.ts",
     "prisma:validate": "pnpm --filter api exec prisma validate",
-    "prisma:migrate": "pnpm --filter api exec prisma migrate dev"
+    "prisma:migrate": "pnpm --filter api exec prisma migrate dev",
+    "prisma:deploy": "pnpm --filter api exec prisma migrate deploy"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

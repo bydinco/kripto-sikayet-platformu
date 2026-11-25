@@ -1,0 +1,103 @@
+# Production template — a starting point, not something to run as-is.
+# Never executed by any script or test in this repo (and was only
+# validated here with `docker compose -f docker-compose.prod.yml config`,
+# never `up`). Copy, fill in real values, and review before deploying —
+# see docs/DEPLOY.md.
+#
+# Unlike docker-compose.yml (dev), postgres/redis publish NO ports at all
+# here — reachable only from api/web over the internal compose network.
+# api/web publish to 127.0.0.1 only, for a host-level Nginx reverse proxy
+# (see docs/DEPLOY.md) to terminate TLS and forward to.
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      # No default (unlike dev's docker-compose.yml, which falls back to
+      # "postgres") — refuses to start rather than silently using a weak
+      # password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set to a strong random value}
+      POSTGRES_DB: ${POSTGRES_DB:-kripto_sikayet}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set to a strong random value}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD must be set to a strong random value}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Placeholder — this repo has no production Dockerfile yet. Build one
+  # (multi-stage: pnpm install --frozen-lockfile, pnpm --filter api build,
+  # run `node dist/main.js`) before this service is actually usable.
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    # .env.production, NOT apps/api/.env — that one is dev-only and must
+    # never be reused here (see docs/DEPLOY.md). required: false so this
+    # template still renders (`docker compose config`) before the file
+    # exists — create it for real, with real production secrets, before
+    # `up`.
+    env_file:
+      - path: apps/api/.env.production
+        required: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3001:3001"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Placeholder — same caveat as api: no production Dockerfile yet.
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    # .env.production, NOT apps/web/.env.local — same reasoning as api above.
+    env_file:
+      - path: apps/web/.env.production
+        required: false
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3002:3002"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  postgres_data:
+  redis_data:

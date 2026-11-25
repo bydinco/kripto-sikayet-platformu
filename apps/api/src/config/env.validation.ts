@@ -13,14 +13,22 @@ export const envValidationSchema = Joi.object({
   PORT: Joi.number().default(3000),
   DATABASE_URL: Joi.string().uri().required(),
   REDIS_URL: Joi.string().uri().optional(),
-  WEB_ORIGIN: Joi.string().uri().default('http://localhost:3002'),
+  // Required in production (no silent fallback to localhost there); kept
+  // optional with a dev-friendly default everywhere else.
+  WEB_ORIGIN: Joi.string()
+    .uri()
+    .when('NODE_ENV', { is: 'production', then: Joi.required(), otherwise: Joi.optional().default('http://localhost:3002') }),
   // Shared Domain= for the refreshToken and session_hint cookies. Empty =
   // host-only (fine when api/web share a hostname, e.g. localhost on
   // different ports — cookies ignore port). In production, where api/web
   // live on separate subdomains, set this to the shared parent domain (e.g.
   // "example.com") so session_hint, set by the API, is also readable by
-  // document.cookie on the web app's own subdomain.
-  COOKIE_DOMAIN: Joi.string().optional().allow(''),
+  // document.cookie on the web app's own subdomain — required (and must be
+  // non-empty) in production, since this project's planned deployment
+  // always splits api/web across subdomains there.
+  COOKIE_DOMAIN: Joi.string()
+    .allow('')
+    .when('NODE_ENV', { is: 'production', then: Joi.required().invalid(''), otherwise: Joi.optional() }),
   // Unset = on-demand revalidation is a no-op (RevalidateService logs and
   // returns instead of calling the web app). See CLAUDE.md.
   REVALIDATE_SECRET: Joi.string().optional().allow(''),

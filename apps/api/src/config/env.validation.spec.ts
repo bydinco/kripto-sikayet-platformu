@@ -40,14 +40,55 @@ describe('envValidationSchema — JWT_ACCESS_SECRET', () => {
     expect(error).toBeDefined();
   });
 
-  it('accepts a long, non-placeholder-looking secret in production', () => {
-    const { error } = envValidationSchema.validate(baseEnv({ NODE_ENV: 'production', JWT_ACCESS_SECRET: STRONG_SECRET }));
+  it('accepts a long, non-placeholder-looking secret in production (with WEB_ORIGIN/COOKIE_DOMAIN also set)', () => {
+    const { error } = envValidationSchema.validate(
+      baseEnv({
+        NODE_ENV: 'production',
+        JWT_ACCESS_SECRET: STRONG_SECRET,
+        WEB_ORIGIN: 'https://app.example.com',
+        COOKIE_DOMAIN: 'example.com',
+      }),
+    );
     expect(error).toBeUndefined();
   });
 
   it('accepts the same weak-looking-by-name value in development (e.g. .env.test\'s own secret)', () => {
     const { error } = envValidationSchema.validate(
       baseEnv({ NODE_ENV: 'test', JWT_ACCESS_SECRET: 'test-only-secret-do-not-use-in-prod-0123456789ab' }),
+    );
+    expect(error).toBeUndefined();
+  });
+});
+
+describe('envValidationSchema — WEB_ORIGIN / COOKIE_DOMAIN in production', () => {
+  it('defaults WEB_ORIGIN to localhost and allows COOKIE_DOMAIN unset outside production', () => {
+    const { error, value } = envValidationSchema.validate(baseEnv());
+    expect(error).toBeUndefined();
+    expect(value.WEB_ORIGIN).toBe('http://localhost:3002');
+  });
+
+  it('rejects production with neither WEB_ORIGIN nor COOKIE_DOMAIN set', () => {
+    const { error } = envValidationSchema.validate(baseEnv({ NODE_ENV: 'production' }));
+    expect(error).toBeDefined();
+  });
+
+  it('rejects production with WEB_ORIGIN set but COOKIE_DOMAIN missing', () => {
+    const { error } = envValidationSchema.validate(
+      baseEnv({ NODE_ENV: 'production', WEB_ORIGIN: 'https://app.example.com' }),
+    );
+    expect(error).toBeDefined();
+  });
+
+  it('rejects production with an empty-string COOKIE_DOMAIN', () => {
+    const { error } = envValidationSchema.validate(
+      baseEnv({ NODE_ENV: 'production', WEB_ORIGIN: 'https://app.example.com', COOKIE_DOMAIN: '' }),
+    );
+    expect(error).toBeDefined();
+  });
+
+  it('accepts production with both WEB_ORIGIN and a non-empty COOKIE_DOMAIN set', () => {
+    const { error } = envValidationSchema.validate(
+      baseEnv({ NODE_ENV: 'production', WEB_ORIGIN: 'https://app.example.com', COOKIE_DOMAIN: 'example.com' }),
     );
     expect(error).toBeUndefined();
   });

@@ -95,11 +95,17 @@ pnpm test        # tüm paketler (vitest)
 pnpm --filter api test:e2e
 pnpm test:smoke  # Playwright duman testi — bkz. "Duman testleri (Playwright)"
 pnpm prisma:validate
-pnpm prisma:migrate
+pnpm prisma:migrate   # = migrate dev — SADECE dev, prod'da KULLANILMAZ
+pnpm prisma:deploy    # = migrate deploy — prod/CI için, interaktif değil
 ```
 
 Host portları (5434/6380/3001/3002) bu makinedeki diğer projelerle
 çakışmaması için varsayılanlardan kaydırıldı; `.env` ile değiştirilebilir.
+Dev `docker-compose.yml`'daki tüm portlar `127.0.0.1`'e sabitlenmiştir
+(dışarıdan erişilemez). Prod için `docker-compose.prod.yml` (şablon,
+bu depoda hiç çalıştırılmadı) — Postgres/Redis'i hiç port yayınlamadan
+sadece iç ağda tutar, `POSTGRES_PASSWORD`/`REDIS_PASSWORD` zorunlu
+(varsayılan yok), bkz. `docs/DEPLOY.md`.
 
 ## e2e testleri — ayrı test veritabanı
 

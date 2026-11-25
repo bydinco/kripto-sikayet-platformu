@@ -6,8 +6,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-kripto_sikayet}
+    # Bound to loopback only — this is dev tooling, not something a real
+    # deployment should ever expose to the network. See docker-compose.prod.yml
+    # for production, which doesn't publish these ports at all.
     ports:
-      - "${HOST_POSTGRES_PORT:-5434}:5432"
+      - "127.0.0.1:${HOST_POSTGRES_PORT:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +23,7 @@ services:
     image: redis:7
     restart: unless-stopped
     ports:
-      - "${HOST_REDIS_PORT:-6380}:6379"
+      - "127.0.0.1:${HOST_REDIS_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -40,7 +43,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_TEST_DB:-kripto_sikayet_test}
     ports:
-      - "${HOST_POSTGRES_TEST_PORT:-5435}:5432"
+      - "127.0.0.1:${HOST_POSTGRES_TEST_PORT:-5435}:5432"
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
     healthcheck:

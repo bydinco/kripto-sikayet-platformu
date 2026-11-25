@@ -7,6 +7,9 @@ coverage/
 .env
 .env.local
 .env.*.local
+# Production env files referenced by docker-compose.prod.yml — never
+# apps/*/.env itself, which is dev-only (see docs/DEPLOY.md).
+.env.production
 *.log
 *.tsbuildinfo
 .DS_Store
