@@ -15,5 +15,11 @@ export default defineConfig({
     // unfiltered list endpoints) and causes CPU/connection contention that
     // shows up as flaky hook timeouts. One file at a time instead.
     fileParallelism: false,
+    // Default (10s/5s) is tight for a cold Nest app boot + first real
+    // Postgres connection, especially right after `docker compose up -d` —
+    // seen flake on this in practice. 60s gives real headroom without
+    // masking a genuinely hung test.
+    hookTimeout: 60_000,
+    testTimeout: 60_000,
   },
 });
