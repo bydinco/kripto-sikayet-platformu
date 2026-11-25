@@ -153,6 +153,19 @@ enum ModerationAction {
   HIDE_COMMENT
 }
 
+// General-purpose, platform-level admin action audit trail — distinct
+// from ModerationLog (report/comment moderation decisions only) and
+// ReportStatusHistory (report status transitions only). See AuditLog
+// model below for what goes here.
+enum AuditAction {
+  USER_ROLE_SET
+  USER_DELETE
+  USER_SELF_DELETE
+  MODEL_ACTIVATE
+  MODEL_DEACTIVATE
+  ENTITY_EDIT
+}
+
 enum NoticeType {
   REMOVAL_REQUEST
   CORRECTION_REQUEST
@@ -251,6 +264,7 @@ model User {
   subscriptions Subscription[]
   handledNotices Notice[]           @relation("NoticeHandler")
   reportStatusChanges ReportStatusHistory[]
+  auditLogs     AuditLog[]
 }
 
 // Rotating refresh tokens. Only the hash is stored; the raw token lives
@@ -749,6 +763,29 @@ model ModerationLog {
   @@index([reportId])
   @@index([postId])
   @@index([commentId])
+}
+
+// Platform-level admin action audit trail (role changes, user deletion,
+// risk model activation, entity edits) — append-only, no update/delete
+// endpoint anywhere. actorId is nullable + SetNull on delete: the actor
+// (an ADMIN) is a User row that could itself later be soft-deleted, and
+// the audit entry must outlive that without ever being removed; a null
+// actorId still means "someone acted, identity no longer resolvable",
+// never "no one acted". metadata carries only non-sensitive before/after
+// values (e.g. a role, an entity field) — NEVER passwords, tokens, or
+// e-mail addresses (see CLAUDE.md "Genel denetim izi").
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  actor      User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     AuditAction
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt])
 }
 
 // ═════════════ LEGAL NOTICES ═════════════
