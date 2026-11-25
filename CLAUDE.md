@@ -178,6 +178,86 @@ bildirim kararı — MODERATOR/ADMIN), `entities` (varlık oluştur/düzenle,
 link ekle/sil — EDITOR/ADMIN). Sayfalar `noindex`; asıl yetki kontrolü API
 tarafındaki `@Roles()` guard'larında, arayüzdeki rol kontrolü sadece UX.
 
+## Rapor etkileşimi: faydalı oyu, "ben de yaşadım", yorum
+
+`apps/api/src/engagement/` (top-level modül, `responses/` ile aynı
+desende — `reports/`'daki `canView`/`isPublicStatus` kopyalarına
+dokunmadan, kendi `report-visibility.util.ts`'i üzerinden doğrudan
+`report-state-machine.ts`'teki `isPublicStatus`'u kullanır).
+
+- **Faydalı oyu** (`ReportVote`, alan tek değer: `helpful` her zaman
+  `true`): `POST /reports/:reportId/votes` idempotent (tekrar çağrı aynı
+  satırı günceller, hata vermez), `DELETE /reports/:reportId/votes`
+  kendi oyunu siler (yoksa 404).
+- **"Ben de yaşadım"**: `ReportComment` satırı, `isMeToo: true`,
+  `body` opsiyonel (boş string olabilir, en fazla 500 karakter).
+  Kullanıcı başına rapor başına bir tane: `meTooReportId` (nullable
+  `String`, me-too satırında `reportId` ile aynı değer, düz yorumlarda
+  `null`) + `@@unique([meTooReportId, userId])` — Postgres `NULL`'ları
+  ayrı saydığı için düz yorumlar hiç çarpışmaz. Kısmi indeks
+  kullanılmadı (Prisma migration drift riski). `POST
+  /reports/:reportId/me-too`, `DELETE /reports/:reportId/me-too`
+  (satırı tamamen siler, soft-hide değil). **Karar:** ikinci "ben de
+  yaşadım" isteği `409 Conflict` döner (votes'taki gibi idempotent
+  DEĞİL) — geri almak için `DELETE` kullanılır; tutarlılık için her
+  yerde bu kural geçerli.
+- **Yorum**: `POST /reports/:reportId/comments` (`body`, 2-1000 karakter,
+  trim edilir, en fazla 2 URL — fazlası 400), `GET
+  /reports/:reportId/comments?limit=20&page=1` (`@OptionalAuth`, en çok
+  50). Yanıt şekli: `{ id, body, isMeToo, createdAt, author: { handle },
+  isReportAuthor }` — `userId`/`email`/iç alanlar asla dönmez. Liste
+  hem düz yorumları hem me-too satırlarını `isMeToo` ile birlikte
+  döner (aynı tablo, tek akış). Rapor sahibi kendi raporuna yorum
+  yazabilir (`isReportAuthor: true`) ama oy/me-too veremez (403).
+- **Silme/gizleme**: `ReportComment.removedAt`/`removedById`/
+  `removedReason` (soft-hide, hard delete yok). Yazarın kendi yorumunu
+  silmesi gerekçesiz (`removedReason: null`, `ModerationLog`'a hiç
+  yazılmaz); MODERATOR/ADMIN başkasının yorumunu gizlerken gerekçe
+  zorunlu (400 yoksa) ve `ModerationLog`'a `commentId` + yeni
+  `ModerationAction.HIDE_COMMENT` ile kayıt düşülür. Kaldırılan yorumlar
+  `GET /comments` listesinden ve `GET /engagement`'in sayımlarından
+  (moderatör dahil, herkes için) tamamen çıkar — denetim izi
+  `ModerationLog`'da kalır. Başkasının yorumunu silmeye çalışan normal
+  kullanıcı 403, var olmayan/zaten gizli yorum 404.
+- **Özet**: `GET /reports/:reportId/engagement` (`@OptionalAuth`) →
+  `{ helpfulCount, meTooCount, commentCount, myHelpful, myMeToo }`.
+  `commentCount` yalnızca `isMeToo: false` + gizlenmemiş satırları
+  sayar; `meTooCount` me-too satırlarını. Giriş yoksa `my*` hep
+  `false`. Web tarafı `myHelpful`/`myMeToo`'yu SSR'da hiç bilemez (SSR
+  oturumu yok, bkz. "Auth mimarisi") — `ReportEngagement` bileşeni
+  mount olduğunda kendi access token'ıyla bu uç noktayı tekrar çeker.
+- **Yetki**: tüm yazma uçları login zorunlu (varsayılan guard), sadece
+  `GET`'ler `@OptionalAuth`. Rapor `isPublicStatus` değilse (PENDING,
+  NEEDS_EVIDENCE, REJECTED, REMOVED) herkese 404 — varlığı sızdırmaz
+  (yazar/moderatör hâlâ görür, `canViewReport` üzerinden).
+- **Throttle/kota**: oy ve me-too dakikada 20, yorum dakikada 5
+  (`apps/api/src/engagement/engagement.constants.ts`, `@Throttle`
+  burst kontrolü — `evidence-file.constants.ts` deseninde ama tüm
+  sabitler bu dosyada). Günlük yorum kotası kullanıcı başına 30; hesap
+  24 saatten yeniyse günlük 5 (`assertDailyQuota`, rolling 24s
+  pencere). Kota aşımı `429` döner (burada evidence upload'ın 403
+  tercihinden bilerek farklı — bu özellik için açık karar). Burst
+  throttle'ın kendisi `NODE_ENV=test`'te global olarak skip edildiği
+  için (`app.module.ts`) e2e'de test edilemez; kota ise
+  `ThrottlerGuard`'a değil kendi servis mantığına bağlı olduğundan e2e
+  ile test edilir (`test/comments.e2e-spec.ts`).
+- **Revalidation**: her başarılı yazma (oy, me-too, yorum, silme/gizleme)
+  sonrası `RevalidateService.revalidate({ tags: ['report:<reportId>'] })`
+  — skor/entity tag'lerine gerek yok, sadece rapor sayfası değişir.
+- **Risk skoru hiç etkilenmez**: oy/me-too/yorum `gatherInputs`'a/
+  `RiskEngineInputs`'a asla girmez (manipülasyon riski). Statik
+  kaynak-kontrolü testi: `scoring/risk-score-engagement-independence.spec.ts`;
+  uçtan uca kanıt: `test/engagement-scoring-independence.e2e-spec.ts`
+  (oy/me-too/yorum/gizleme sonrası `RiskScore` satırı birebir aynı
+  kalıyor).
+- **Web**: rapor detay sayfası engagement özetini ve yorum listesini
+  sunucu tarafında aynı `report:<id>` tag'iyle çeker (ISR bozulmaz);
+  etkileşim `ReportEngagement` (`apps/web/src/components/
+  report-engagement.tsx`) istemci bileşeninde — optimistik güncelleme +
+  hata durumunda geri alma. Admin rapor sayfasında her yorumun yanında
+  "Gizle" + zorunlu gerekçe alanı (`HideCommentControl`,
+  `admin-report-detail.tsx`).
+
 ## Risk skoru motoru
 
 `apps/api/src/scoring/risk-score-engine.ts`: saf, deterministik

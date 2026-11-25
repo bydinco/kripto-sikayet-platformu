@@ -5,13 +5,22 @@ import { apiFetch, evidenceFileUrl } from '../../../../lib/api-client';
 import { buildMetadata } from '../../../../lib/seo';
 import { getDictionary } from '../../../../dictionaries/get-dictionary';
 import type { Locale } from '../../../../lib/locale';
-import type { ApiEntity, ApiEntityResponse, ApiEvidence, ApiReport, ApiRiskScore } from '../../../../lib/api-models';
+import type {
+  ApiComment,
+  ApiEngagement,
+  ApiEntity,
+  ApiEntityResponse,
+  ApiEvidence,
+  ApiReport,
+  ApiRiskScore,
+} from '../../../../lib/api-models';
 import { formatDate } from '../../../../lib/format';
 import { StatusBadge } from '../../../../components/status-badge';
 import { Pill } from '../../../../components/pill';
 import { RiskMeter } from '../../../../components/risk-meter';
 import { ShareButton } from '../../../../components/share-button';
 import { ReportNoticeForm } from '../../../../components/report-notice-form';
+import { ReportEngagement } from '../../../../components/report-engagement';
 
 // Every fetch on this page is tagged by reportId — the API revalidates
 // this tag on every status transition, especially REMOVED/RESTORE (the
@@ -49,6 +58,29 @@ async function getEvidence(reportId: string): Promise<ApiEvidence[]> {
 async function getResponses(reportId: string): Promise<ApiEntityResponse[]> {
   try {
     return await apiFetch<ApiEntityResponse[]>(`/reports/${encodeURIComponent(reportId)}/responses`, {
+      next: { revalidate: 300, tags: [`report:${reportId}`] },
+    });
+  } catch {
+    return [];
+  }
+}
+
+// Anonymous SSR fetch — never carries myHelpful/myMeToo (no SSR session,
+// see CLAUDE.md auth architecture); ReportEngagement refetches this
+// client-side with the viewer's access token once it has one.
+async function getEngagement(reportId: string): Promise<ApiEngagement> {
+  try {
+    return await apiFetch<ApiEngagement>(`/reports/${encodeURIComponent(reportId)}/engagement`, {
+      next: { revalidate: 300, tags: [`report:${reportId}`] },
+    });
+  } catch {
+    return { helpfulCount: 0, meTooCount: 0, commentCount: 0, myHelpful: false, myMeToo: false };
+  }
+}
+
+async function getComments(reportId: string): Promise<ApiComment[]> {
+  try {
+    return await apiFetch<ApiComment[]>(`/reports/${encodeURIComponent(reportId)}/comments?limit=50`, {
       next: { revalidate: 300, tags: [`report:${reportId}`] },
     });
   } catch {
@@ -100,10 +132,12 @@ export default async function ReportDetailPage({ params }: PageProps<'/[locale]/
   const report = await getReport(id);
   if (!report) notFound();
 
-  const [entity, evidence, responses] = await Promise.all([
+  const [entity, evidence, responses, engagement, comments] = await Promise.all([
     getEntity(report.id, report.entityId),
     getEvidence(report.id),
     getResponses(report.id),
+    getEngagement(report.id),
+    getComments(report.id),
   ]);
   const riskScore = entity ? await getLatestRiskScore(report.id, entity.id) : null;
   const isDisputed = responses.some((r) => r.disputed);
@@ -146,10 +180,6 @@ export default async function ReportDetailPage({ params }: PageProps<'/[locale]/
             ) : null}
             <div className="row">
               <ShareButton label={dictionary.reportDetail.shareButton} copiedLabel={dictionary.reportDetail.shareCopied} />
-              {/* No ReportVote API yet — disabled, not pretending to work. */}
-              <button type="button" className="button button-secondary" disabled title={dictionary.reportDetail.meTooButton}>
-                {dictionary.reportDetail.meTooButton}
-              </button>
             </div>
           </div>
 
@@ -218,11 +248,14 @@ export default async function ReportDetailPage({ params }: PageProps<'/[locale]/
             )}
           </div>
 
-          <div className="stack">
-            <h2>{dictionary.reportDetail.commentsTitle}</h2>
-            {/* No ReportComment API yet — show the honest empty state only. */}
-            <p className="muted">{dictionary.reportDetail.noComments}</p>
-          </div>
+          <ReportEngagement
+            reportId={report.id}
+            reportAuthorId={report.authorId}
+            locale={locale}
+            dictionary={dictionary}
+            initialSummary={engagement}
+            initialComments={comments}
+          />
         </div>
 
         <div className="stack">

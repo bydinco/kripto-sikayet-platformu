@@ -84,8 +84,19 @@ export interface Dictionary {
     chainVerifiedLabel: string;
     notVerifiedLabel: string;
     meTooButton: string;
+    meTooCountLabel: string; // "{n} <meTooCountLabel>", built in code
+    meTooBodyPlaceholder: string;
+    meTooSubmitButton: string;
+    helpfulButton: string;
+    helpfulCountLabel: string; // "{n} <helpfulCountLabel>", built in code
+    ownReportNotice: string;
     commentsTitle: string;
     noComments: string;
+    commentPlaceholder: string;
+    commentSubmit: string;
+    commentDeleteButton: string;
+    commentOpinionNotice: string;
+    reportAuthorBadge: string;
     shareButton: string;
     shareCopied: string;
     reportNoticeButton: string;
@@ -200,6 +211,10 @@ export interface Dictionary {
       noTransitions: string;
       reasonLabel: string;
       submitTransition: string;
+      commentsTitle: string;
+      noComments: string;
+      hideButton: string;
+      hideSubmit: string;
     };
     notices: {
       title: string;

@@ -322,6 +322,23 @@ export interface ApiEntityResponse {
   disputed: boolean;
 }
 
+export interface ApiComment {
+  id: string;
+  body: string;
+  isMeToo: boolean;
+  createdAt: string;
+  author: { handle: string };
+  isReportAuthor: boolean;
+}
+
+export interface ApiEngagement {
+  helpfulCount: number;
+  meTooCount: number;
+  commentCount: number;
+  myHelpful: boolean;
+  myMeToo: boolean;
+}
+
 export interface LoginResult {
   accessToken: string;
   user: ApiUser;

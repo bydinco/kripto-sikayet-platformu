@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { apiFetch, apiFetchBlob, ApiError } from '../../lib/api-client';
 import type {
+  ApiComment,
   ApiEntityResponse,
   ApiEvidence,
   ApiModerationLog,
@@ -73,6 +74,78 @@ function EvidenceFilePreview({
   );
 }
 
+// Inline reason input for HIDE_COMMENT — kept as its own small component so
+// each comment's draft reason is local state, not one shared string for
+// the whole list.
+function HideCommentControl({
+  commentId,
+  accessToken,
+  reportId,
+  dictionary,
+  onHidden,
+}: {
+  commentId: string;
+  accessToken: string;
+  reportId: string;
+  dictionary: Dictionary;
+  onHidden: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!open) {
+    return (
+      <button type="button" className="button button-secondary" onClick={() => setOpen(true)}>
+        {dictionary.admin.reportDetail.hideButton}
+      </button>
+    );
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await apiFetch(`/reports/${reportId}/comments/${commentId}`, {
+        method: 'DELETE',
+        accessToken,
+        body: { reason },
+      });
+      onHidden();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="stack">
+      <div className="field">
+        <label htmlFor={`hide-reason-${commentId}`}>{dictionary.admin.reportDetail.reasonLabel}</label>
+        <textarea
+          id={`hide-reason-${commentId}`}
+          className="textarea"
+          required
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </div>
+      {error ? <p className="error-text">{error}</p> : null}
+      <div className="row">
+        <button type="submit" className="button" disabled={busy}>
+          {dictionary.admin.reportDetail.hideSubmit}
+        </button>
+        <button type="button" className="button button-secondary" onClick={() => setOpen(false)}>
+          ×
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function Body({
   id,
   accessToken,
@@ -87,6 +160,7 @@ function Body({
   const [report, setReport] = useState<ApiReport | null>(null);
   const [evidence, setEvidence] = useState<ApiEvidence[]>([]);
   const [responses, setResponses] = useState<ApiEntityResponse[]>([]);
+  const [comments, setComments] = useState<ApiComment[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [nextStatus, setNextStatus] = useState<ReportStatus | ''>('');
   const [reason, setReason] = useState('');
@@ -94,16 +168,18 @@ function Body({
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [reportRes, evidenceRes, responsesRes, historyRes, logsRes] = await Promise.all([
+    const [reportRes, evidenceRes, responsesRes, commentsRes, historyRes, logsRes] = await Promise.all([
       apiFetch<ApiReport>(`/reports/${id}`, { accessToken }),
       apiFetch<ApiEvidence[]>(`/evidence?reportId=${id}`, { accessToken }),
       apiFetch<ApiEntityResponse[]>(`/reports/${id}/responses`, { accessToken }),
+      apiFetch<ApiComment[]>(`/reports/${id}/comments?limit=50`, { accessToken }),
       apiFetch<ApiReportStatusHistory[]>(`/reports/${id}/status-history`, { accessToken }),
       apiFetch<ApiModerationLog[]>(`/moderation?reportId=${id}`, { accessToken }),
     ]);
     setReport(reportRes);
     setEvidence(evidenceRes);
     setResponses(responsesRes);
+    setComments(commentsRes);
     setTimeline(
       [
         ...historyRes.map((h) => ({
@@ -204,6 +280,32 @@ function Body({
             <div key={response.id} className="card stack">
               <p style={{ whiteSpace: 'pre-wrap' }}>{response.body}</p>
               <span className="muted">{formatDate(response.createdAt, locale)}</span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="stack">
+        <h2>{dictionary.admin.reportDetail.commentsTitle}</h2>
+        {comments.length === 0 ? (
+          <p className="muted">{dictionary.admin.reportDetail.noComments}</p>
+        ) : (
+          comments.map((comment) => (
+            <div key={comment.id} className="card stack">
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <span>
+                  <strong>{comment.author.handle}</strong> · {comment.isMeToo ? 'me-too' : 'comment'}
+                </span>
+                <span className="muted">{formatDate(comment.createdAt, locale)}</span>
+              </div>
+              {comment.body ? <p style={{ whiteSpace: 'pre-wrap' }}>{comment.body}</p> : null}
+              <HideCommentControl
+                commentId={comment.id}
+                reportId={id}
+                accessToken={accessToken}
+                dictionary={dictionary}
+                onHidden={() => void load()}
+              />
             </div>
           ))
         )}
