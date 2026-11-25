@@ -1,5 +1,13 @@
 import Joi from 'joi';
 
+// Case-insensitive substring match for common placeholder/example secrets,
+// plus a separate check for a single character repeated the whole way
+// through (e.g. "aaaaaaaa...") — both are things a real random secret
+// should never look like, but a copy-pasted-and-forgotten .env.example
+// value or a lazily-typed one could.
+const WEAK_SECRET_PATTERN = /change[-_ ]?me|secret|test|password|example/i;
+const REPEATED_CHAR_PATTERN = /^(.)\1*$/;
+
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
   PORT: Joi.number().default(3000),
@@ -16,7 +24,7 @@ export const envValidationSchema = Joi.object({
   // Unset = on-demand revalidation is a no-op (RevalidateService logs and
   // returns instead of calling the web app). See CLAUDE.md.
   REVALIDATE_SECRET: Joi.string().optional().allow(''),
-  JWT_ACCESS_SECRET: Joi.string().min(16).required(),
+  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().positive().default(30),
   // CoinGecko price feed (see CLAUDE.md "Piyasa fiyat verisi" section).
@@ -57,4 +65,20 @@ export const envValidationSchema = Joi.object({
     then: Joi.required(),
     otherwise: Joi.optional().allow(''),
   }),
+}).custom((value: Record<string, unknown>) => {
+  // Production-only: reject an obviously weak/placeholder
+  // JWT_ACCESS_SECRET outright, on top of the unconditional min(32)
+  // length check above. Dev/test keep accepting any value that passes
+  // length alone — .env.test's own secret contains "secret" and "test"
+  // by name and must keep working there.
+  if (value.NODE_ENV === 'production') {
+    const secret = String(value.JWT_ACCESS_SECRET ?? '');
+    if (WEAK_SECRET_PATTERN.test(secret) || REPEATED_CHAR_PATTERN.test(secret)) {
+      throw new Error(
+        'JWT_ACCESS_SECRET, production ortamında zayıf/placeholder bir değer içeremez ' +
+          '(change-me, secret, test, password, example gibi kelimeler veya tek karakterin tekrarı).',
+      );
+    }
+  }
+  return value;
 });
