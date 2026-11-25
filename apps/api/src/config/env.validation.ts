@@ -25,6 +25,11 @@ export const envValidationSchema = Joi.object({
   // returns instead of calling the web app). See CLAUDE.md.
   REVALIDATE_SECRET: Joi.string().optional().allow(''),
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+  // 0 (default) = Express's "trust proxy" setting is left untouched, so
+  // req.ip is always the real socket address and X-Forwarded-For can't be
+  // spoofed to dodge ThrottlerGuard's IP-based limiting. Set to 1 behind a
+  // single reverse proxy in production — see trust-proxy.ts.
+  TRUST_PROXY_HOPS: Joi.number().integer().min(0).default(0),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().positive().default(30),
   // CoinGecko price feed (see CLAUDE.md "Piyasa fiyat verisi" section).
