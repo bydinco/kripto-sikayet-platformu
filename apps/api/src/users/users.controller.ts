@@ -1,9 +1,11 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { UsersService } from './users.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { SetRoleDto } from './dto/set-role.dto.js';
+import { DeleteSelfDto } from './dto/delete-self.dto.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
@@ -28,6 +30,16 @@ export class UsersController {
     return users.map((user) => toUserResponse(user, true));
   }
 
+  // Self-service account deletion — requires your own current password.
+  // Registered before ':id' below so Nest/Express doesn't try to match
+  // "me" as an :id param.
+  @Delete('me')
+  @HttpCode(200)
+  async removeSelf(@Body() dto: DeleteSelfDto, @CurrentUser() currentUser: JwtPayload) {
+    await this.usersService.deleteSelf(currentUser, dto.password);
+    return { deleted: true };
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentUser() currentUser: JwtPayload) {
     this.assertSelfOrAdmin(id, currentUser);
@@ -46,10 +58,27 @@ export class UsersController {
     return toUserResponse(user, true);
   }
 
+  // ADMIN only. Validity of `role` itself is enforced by SetRoleDto's
+  // @IsEnum(Role) (unknown value -> 400); ownership/last-admin rules are
+  // in UsersService.setRole (self -> 403, last ADMIN demoted -> 409).
+  @Roles(Role.ADMIN)
+  @Patch(':id/role')
+  async setRole(
+    @Param('id') id: string,
+    @Body() dto: SetRoleDto,
+    @CurrentUser() currentUser: JwtPayload,
+  ) {
+    const user = await this.usersService.setRole(id, dto.role, currentUser);
+    return toUserResponse(user, true);
+  }
+
+  // ADMIN-initiated deletion of someone else's account. For your own
+  // account, use DELETE /users/me instead (password-confirmed).
   @Roles(Role.ADMIN)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() currentUser: JwtPayload) {
+    await this.usersService.deleteByAdmin(id, currentUser);
+    return { deleted: true };
   }
 
   private assertSelfOrAdmin(targetId: string, currentUser: JwtPayload) {

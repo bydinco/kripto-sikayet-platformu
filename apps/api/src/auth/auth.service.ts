@@ -67,7 +67,12 @@ export class AuthService {
     const hashToCheck = user?.passwordHash ?? DUMMY_HASH;
     const passwordOk = await argon2.verify(hashToCheck, password);
 
-    if (!user || !user.passwordHash || !passwordOk) {
+    // deletedAt is checked alongside, not before, the argon2 call — a
+    // deleted account's scrambled passwordHash already makes passwordOk
+    // false on its own (see UsersService.anonymizeAndSoftDelete), but
+    // this keeps timing/response shape identical to "wrong password" and
+    // "no such user" regardless, rather than relying on that incidentally.
+    if (!user || !user.passwordHash || !passwordOk || user.deletedAt) {
       throw new UnauthorizedException('E-posta veya parola hatalı.');
     }
     return user;
@@ -116,7 +121,12 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: existing.userId } });
-    if (!user) {
+    // A soft-deleted user's refresh tokens are already revoked as part of
+    // the same deletion transaction (UsersService), so this would
+    // normally never be reached for them — checked explicitly anyway
+    // (same generic message, no enumeration) rather than relying on that
+    // incidentally.
+    if (!user || user.deletedAt) {
       throw new UnauthorizedException('Oturum geçersiz, tekrar giriş yapın.');
     }
 

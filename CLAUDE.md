@@ -164,6 +164,51 @@ reset`i engeller, kullanıcı bunun yerine truncate'i tercih etti. 16 dosya
   alan adında olacağından, `session_hint`'in web alt alan adında
   `document.cookie` ile görünebilmesi için ortak üst alan adına
   (`example.com`) ayarlanmalı.
+- Rol, JWT payload'ının içinde taşınır (`JwtPayload.role`) ve `JwtAuthGuard`
+  bunu **DB'ye hiç sormadan** kullanır. Bir rol değişikliği
+  (`PATCH /users/:id/role`) o anda kullanıcının tüm refresh token'larını
+  iptal eder (bir sonraki `/auth/refresh` zorunlu olur), ama zaten
+  çıkarılmış bir access token en fazla `JWT_ACCESS_TTL` (varsayılan 15 dk)
+  kadar eski rolle geçerli kalabilir — bu süre boyunca eski rol
+  `@Roles()` guard'larından geçebilir. Kısaltmak isteyen `JWT_ACCESS_TTL`'i
+  düşürebilir (trade-off: daha sık refresh).
+
+## Genel denetim izi (`AuditLog`) ve kullanıcı yönetimi
+
+- `AuditLog` (`apps/api/src/audit/`): `ModerationLog` (rapor/yorum
+  moderasyonu) ve `ReportStatusHistory` (durum geçişleri) dışında kalan,
+  platform seviyesi admin işlemleri için — `USER_ROLE_SET`, `USER_DELETE`,
+  `USER_SELF_DELETE`, `MODEL_ACTIVATE`, `MODEL_DEACTIVATE`, `ENTITY_EDIT`.
+  Güncelleme/silme uç noktası yok, sadece ekleme. `metadata`'ya asla
+  parola/token/e-posta yazılmaz (`AuditService` isim bazlı — `password`,
+  `token`, `secret`, `email` içeren key'ler — otomatik `[REDACTED]`
+  yapar, ama çağıranlar zaten bunları hiç göndermemeli).
+  `AuditService.record()` kritik olmayan işlemler için (model
+  aktivasyonu, varlık düzenleme) hiç throw etmez, sadece loglar.
+  `AuditService.write()` ise ham bir Prisma operasyonu döner — rol
+  atama ve kullanıcı silme gibi kritik işlemlerde, "işlem oldu ama iz
+  yok" olmaması için çağıranın kendi `$transaction([...])` dizisine
+  eklenir.
+- **Rol atama** (`PATCH /users/:id/role`, yalnızca ADMIN): kendi rolünü
+  değiştiremez (403); sistemdeki son ADMIN rolden düşürülemez (409 —
+  istek anındaki toplam ADMIN sayısı ≤1 ise). Başarıda hedef kullanıcının
+  tüm refresh token'ları aynı transaction içinde iptal edilir.
+- **Kullanıcı silme** — hard delete YOK, sadece soft-delete +
+  anonimleştirme (`UsersService.anonymizeAndSoftDelete`):
+  `deletedAt` set edilir, `email` → `deleted-<id>@deleted.invalid`,
+  `handle` → `deleted-<rastgele>`, `passwordHash` → rastgele argon2 hash
+  (giriş imkânsız), tüm refresh token'lar iptal — hepsi tek transaction.
+  `DELETE /users/me` (kendi hesap, body'de parola doğrulaması) ve
+  `DELETE /users/:id` (yalnızca ADMIN, başkasının hesabı) aynı servis
+  metodunu çağırır. Sistemdeki son ADMIN silinemez (409).
+  Kullanıcının yazdığı rapor/yorum/oy/yanıt **silinmez**, anonimleşmiş
+  handle ile görünmeye devam eder — bu bir ürün/hukuk kararıdır, **KVKK/
+  GDPR avukat incelemesi gerekir** (veri saklama süresi, "unutulma
+  hakkı"nın içerik-seviyesinde ne anlama geldiği gibi sorular henüz
+  değerlendirilmedi). Bekleyen (PENDING/NEEDS_EVIDENCE) raporlar da
+  korunur. Giriş ve refresh, `deletedAt` dolu bir kullanıcıyı genel
+  "geçersiz bilgiler" mesajıyla reddeder (numaralandırma yok).
+  Silinmiş kullanıcılar `GET /users` listesinde görünmez.
 
 ## Durum makinesi (`Report.status`)
 
