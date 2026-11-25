@@ -18,6 +18,7 @@ import { NoticesModule } from './notices/notices.module.js';
 import { ResponsesModule } from './responses/responses.module.js';
 import { MarketModule } from './market/market.module.js';
 import { EngagementModule } from './engagement/engagement.module.js';
+import { AuditModule } from './audit/audit.module.js';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { EngagementModule } from './engagement/engagement.module.js';
     ResponsesModule,
     MarketModule,
     EngagementModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
