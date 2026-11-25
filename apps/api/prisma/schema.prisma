@@ -147,6 +147,10 @@ enum ModerationAction {
   // A moderator/admin opened an unapproved evidence file (GET
   // /evidence/:id/file) — audit trail for viewing not-yet-public content.
   VIEW_EVIDENCE
+  // A moderator/admin hid a ReportComment (see ModerationLog.commentId).
+  // Always carries a mandatory reason (self-removal by the comment's own
+  // author does not go through this action or ModerationLog at all).
+  HIDE_COMMENT
 }
 
 enum NoticeType {
@@ -234,6 +238,7 @@ model User {
   reports       Report[]            @relation("ReportAuthor")
   votes         ReportVote[]
   comments      ReportComment[]
+  removedComments ReportComment[]   @relation("CommentRemovedBy")
   responses     EntityResponse[]
   ownedEntities Entity[]            @relation("EntityOwner")
   claims        EntityClaim[]
@@ -686,8 +691,27 @@ model ReportComment {
   user      User     @relation(fields: [userId], references: [id])
   body      String
   isMeToo   Boolean  @default(false)
+  // Set to this row's own reportId when isMeToo is true, null for a plain
+  // comment. Exists only so @@unique below can enforce "one me-too per
+  // user per report" — Postgres treats NULL as distinct, so plain comments
+  // (meTooReportId: null) never collide with each other or with the
+  // uniqueness check. No @relation: a duplicate of reportId, not a second
+  // foreign key.
+  meTooReportId String?
   createdAt DateTime @default(now())
 
+  // Soft-hide only, never a hard delete: the author removing their own
+  // comment also goes through these fields (removedById = themselves,
+  // removedReason = null), so ModerationLog.commentId is written only for
+  // a MODERATOR/ADMIN decision (HIDE_COMMENT), never for self-removal.
+  removedAt     DateTime?
+  removedById   String?
+  removedBy     User?     @relation("CommentRemovedBy", fields: [removedById], references: [id])
+  removedReason String?
+
+  modLogs ModerationLog[]
+
+  @@unique([meTooReportId, userId])
   @@index([reportId, createdAt])
 }
 
@@ -711,6 +735,11 @@ model ModerationLog {
   report      Report?          @relation(fields: [reportId], references: [id], onDelete: Cascade)
   postId      String?
   post        Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // Set only for the HIDE_COMMENT action; reportId stays populated too
+  // (the comment's own report), so existing reportId-only queries over
+  // ModerationLog keep working unchanged.
+  commentId   String?
+  comment     ReportComment?   @relation(fields: [commentId], references: [id], onDelete: Cascade)
   moderatorId String
   moderator   User             @relation(fields: [moderatorId], references: [id])
   action      ModerationAction
@@ -719,6 +748,7 @@ model ModerationLog {
 
   @@index([reportId])
   @@index([postId])
+  @@index([commentId])
 }
 
 // ═════════════ LEGAL NOTICES ═════════════
