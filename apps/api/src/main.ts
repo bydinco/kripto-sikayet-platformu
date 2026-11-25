@@ -13,6 +13,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 import { applyTrustProxy, resolveTrustProxyHops } from './trust-proxy.js';
+import { isSwaggerEnabled } from './swagger-enabled.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -23,13 +24,19 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
 
-  const config = new DocumentBuilder()
-    .setTitle('Kripto Şikayet ve Risk Platformu API')
-    .setDescription('Şikayet, kanıt, risk skoru, moderasyon ve bildirim uç noktaları')
-    .setVersion('0.0.1')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Both the dev server and the Playwright smoke suite run with
+  // NODE_ENV!=='production', so this never affects them (the smoke
+  // suite's webServer readiness probe polls /api/docs — see
+  // e2e-smoke/playwright.config.ts).
+  if (isSwaggerEnabled(process.env.NODE_ENV, process.env.SWAGGER_ENABLED)) {
+    const config = new DocumentBuilder()
+      .setTitle('Kripto Şikayet ve Risk Platformu API')
+      .setDescription('Şikayet, kanıt, risk skoru, moderasyon ve bildirim uç noktaları')
+      .setVersion('0.0.1')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }

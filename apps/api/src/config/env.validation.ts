@@ -30,6 +30,9 @@ export const envValidationSchema = Joi.object({
   // spoofed to dodge ThrottlerGuard's IP-based limiting. Set to 1 behind a
   // single reverse proxy in production — see trust-proxy.ts.
   TRUST_PROXY_HOPS: Joi.number().integer().min(0).default(0),
+  // Swagger (/api/docs) is on by default outside production; this is an
+  // explicit opt-in to turn it on in production too. See swagger-enabled.ts.
+  SWAGGER_ENABLED: Joi.string().valid('true', 'false').optional(),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: Joi.number().integer().positive().default(30),
   // CoinGecko price feed (see CLAUDE.md "Piyasa fiyat verisi" section).
