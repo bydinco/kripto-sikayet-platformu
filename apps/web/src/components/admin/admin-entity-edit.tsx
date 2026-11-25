@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { apiFetch, ApiError } from '../../lib/api-client';
+import { isSafeHttpUrl } from '../../lib/safe-url';
 import { useAuth } from '../../lib/auth-context';
 import type { ApiEntity, ApiEntityLink, EntityType, LinkKind } from '../../lib/api-models';
 import { RequireRole } from './require-role';
@@ -70,10 +71,13 @@ function LinksSection({
         <div key={link.id} className="row" style={{ justifyContent: 'space-between' }}>
           <span>
             <span className="muted">{humanizeEnum(link.kind)}</span>{' '}
-            {/* Always http(s) — enforced server-side on create — safe as a real anchor. */}
-            <a href={link.url} target="_blank" rel="nofollow noopener noreferrer">
-              {link.url}
-            </a>
+            {isSafeHttpUrl(link.url) ? (
+              <a href={link.url} target="_blank" rel="nofollow noopener noreferrer">
+                {link.url}
+              </a>
+            ) : (
+              <span>{link.url}</span>
+            )}
           </span>
           <button type="button" className="button button-secondary" onClick={() => void removeLink(link.id)}>
             {dictionary.admin.entities.removeLink}

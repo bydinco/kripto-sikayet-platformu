@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { apiFetch, evidenceFileUrl } from '../../../../lib/api-client';
+import { isSafeHttpUrl } from '../../../../lib/safe-url';
 import { buildMetadata } from '../../../../lib/seo';
 import { getDictionary } from '../../../../dictionaries/get-dictionary';
 import type { Locale } from '../../../../lib/locale';
@@ -96,18 +97,6 @@ async function getLatestRiskScore(reportId: string, entityId: string): Promise<A
     return scores[0] ?? null;
   } catch {
     return null;
-  }
-}
-
-// Only ever render a LINK evidence value as a clickable anchor when it's
-// genuinely http(s) — the backend already enforces this at creation time,
-// this is a second, independent check at render time.
-function isSafeHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
   }
 }
 

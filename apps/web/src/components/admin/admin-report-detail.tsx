@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { apiFetch, apiFetchBlob, ApiError } from '../../lib/api-client';
+import { isSafeHttpUrl } from '../../lib/safe-url';
 import type {
   ApiComment,
   ApiEntityResponse,
@@ -17,17 +18,6 @@ import { StatusBadge } from '../status-badge';
 import { formatDate } from '../../lib/format';
 import type { Dictionary } from '../../dictionaries/types';
 import type { Locale } from '../../lib/locale';
-
-// Second, independent check at render time — the backend already enforces
-// LINK evidence must be http(s) at creation.
-function isSafeHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
 
 interface TimelineEntry {
   createdAt: string;
