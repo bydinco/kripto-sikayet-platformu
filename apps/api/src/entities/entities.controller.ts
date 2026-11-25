@@ -57,14 +57,14 @@ export class EntitiesController {
 
   @Roles(Role.ADMIN, Role.EDITOR)
   @Post(':id/links')
-  addLink(@Param('id') id: string, @Body() dto: CreateEntityLinkDto) {
-    return this.entitiesService.addLink(id, dto);
+  addLink(@Param('id') id: string, @Body() dto: CreateEntityLinkDto, @CurrentUser() currentUser: JwtPayload) {
+    return this.entitiesService.addLink(id, dto, currentUser);
   }
 
   @Roles(Role.ADMIN, Role.EDITOR)
   @Delete(':id/links/:linkId')
-  removeLink(@Param('id') id: string, @Param('linkId') linkId: string) {
-    return this.entitiesService.removeLink(id, linkId);
+  removeLink(@Param('id') id: string, @Param('linkId') linkId: string, @CurrentUser() currentUser: JwtPayload) {
+    return this.entitiesService.removeLink(id, linkId, currentUser);
   }
 
   @Roles(Role.ADMIN, Role.EDITOR)

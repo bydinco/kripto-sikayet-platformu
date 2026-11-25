@@ -3,9 +3,10 @@ import { ScoringService } from './scoring.service.js';
 import { ScoringController } from './scoring.controller.js';
 import { RiskScoreCronService } from './risk-score-cron.service.js';
 import { RevalidateModule } from '../revalidate/revalidate.module.js';
+import { AuditModule } from '../audit/audit.module.js';
 
 @Module({
-  imports: [RevalidateModule],
+  imports: [RevalidateModule, AuditModule],
   controllers: [ScoringController],
   providers: [ScoringService, RiskScoreCronService],
   exports: [ScoringService],

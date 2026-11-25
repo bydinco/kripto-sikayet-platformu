@@ -1,18 +1,22 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { EntityStatus, EntityType, Prisma, Role } from '@prisma/client';
+import { AuditAction, EntityStatus, EntityType, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ScoringService } from '../scoring/scoring.service.js';
+import { AuditService } from '../audit/audit.service.js';
 import { CreateEntityDto } from './dto/create-entity.dto.js';
 import { UpdateEntityDto } from './dto/update-entity.dto.js';
 import { CreateEntityLinkDto } from './dto/create-entity-link.dto.js';
 import { CreateContractAuditDto } from './dto/create-contract-audit.dto.js';
 import type { JwtPayload } from '../common/types/jwt-payload.interface.js';
 
+const EDITABLE_SCALAR_FIELDS = ['name', 'summary', 'country'] as const;
+
 @Injectable()
 export class EntitiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scoring: ScoringService,
+    private readonly audit: AuditService,
   ) {}
 
   async create(createEntityDto: CreateEntityDto) {
@@ -76,6 +80,18 @@ export class EntitiesService {
   }
 
   async update(id: string, updateEntityDto: UpdateEntityDto, currentUser: JwtPayload) {
+    // Fetched up front (new — the old code relied on prisma.entity.update
+    // itself to fail for a missing id, which it never handled and would
+    // have 500'd): also doubles as the "before" snapshot for the audit
+    // diff below.
+    const existing = await this.prisma.entity.findUnique({
+      where: { id },
+      include: { coin: { select: { coingeckoId: true } } },
+    });
+    if (!existing) {
+      throw new NotFoundException('Varlık bulunamadı.');
+    }
+
     const { verified, coingeckoId, ...rest } = updateEntityDto;
     if (verified !== undefined && currentUser.role !== Role.ADMIN) {
       throw new ForbiddenException('Doğrulanmış rozeti sadece ADMIN değiştirebilir.');
@@ -102,6 +118,39 @@ export class EntitiesService {
       await this.prisma.coin.updateMany({ where: { entityId: id }, data: { coingeckoId: coingeckoId || null } });
     }
 
+    // Non-critical (unlike role assignment/user deletion): fire-and-
+    // forget. Only the fields actually present in the request, with
+    // before/after values — all safe fields (name/summary/country/tags/
+    // verified/coingeckoId), never a secret.
+    const changedFields: Record<string, { from: unknown; to: unknown }> = {};
+    for (const field of EDITABLE_SCALAR_FIELDS) {
+      if (rest[field] !== undefined && rest[field] !== existing[field]) {
+        changedFields[field] = { from: existing[field], to: rest[field] };
+      }
+    }
+    if (rest.tags !== undefined && JSON.stringify(rest.tags) !== JSON.stringify(existing.tags)) {
+      changedFields.tags = { from: existing.tags, to: rest.tags };
+    }
+    if (verified !== undefined && verified !== existing.verified) {
+      changedFields.verified = { from: existing.verified, to: verified };
+    }
+    if (coingeckoId !== undefined) {
+      const normalized = coingeckoId || null;
+      const before = existing.coin?.coingeckoId ?? null;
+      if (normalized !== before) {
+        changedFields.coingeckoId = { from: before, to: normalized };
+      }
+    }
+    if (Object.keys(changedFields).length > 0) {
+      await this.audit.record({
+        actorId: currentUser.sub,
+        action: AuditAction.ENTITY_EDIT,
+        targetType: 'Entity',
+        targetId: id,
+        metadata: { changedFields },
+      });
+    }
+
     return this.findOne(id);
   }
 
@@ -109,24 +158,41 @@ export class EntitiesService {
     return this.prisma.entity.delete({ where: { id } });
   }
 
-  async addLink(entityId: string, dto: CreateEntityLinkDto) {
+  async addLink(entityId: string, dto: CreateEntityLinkDto, currentUser: JwtPayload) {
     const entity = await this.prisma.entity.findUnique({ where: { id: entityId }, select: { id: true } });
     if (!entity) {
       throw new NotFoundException('Varlık bulunamadı.');
     }
+    let link;
     try {
-      return await this.prisma.entityLink.create({ data: { ...dto, entityId } });
+      link = await this.prisma.entityLink.create({ data: { ...dto, entityId } });
     } catch (error) {
       throw this.mapKnownError(error);
     }
+    await this.audit.record({
+      actorId: currentUser.sub,
+      action: AuditAction.ENTITY_EDIT,
+      targetType: 'Entity',
+      targetId: entityId,
+      metadata: { linkAdded: { kind: link.kind, url: link.url } },
+    });
+    return link;
   }
 
-  async removeLink(entityId: string, linkId: string) {
+  async removeLink(entityId: string, linkId: string, currentUser: JwtPayload) {
     const link = await this.prisma.entityLink.findUnique({ where: { id: linkId } });
     if (!link || link.entityId !== entityId) {
       throw new NotFoundException('Link bulunamadı.');
     }
-    return this.prisma.entityLink.delete({ where: { id: linkId } });
+    const removed = await this.prisma.entityLink.delete({ where: { id: linkId } });
+    await this.audit.record({
+      actorId: currentUser.sub,
+      action: AuditAction.ENTITY_EDIT,
+      targetType: 'Entity',
+      targetId: entityId,
+      metadata: { linkRemoved: { kind: removed.kind, url: removed.url } },
+    });
+    return removed;
   }
 
   // There is no API yet to create a Coin profile itself (seed/direct DB

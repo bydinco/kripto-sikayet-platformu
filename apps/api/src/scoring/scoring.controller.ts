@@ -49,8 +49,8 @@ export class ScoringController {
   // the same entityType.
   @Roles(Role.ADMIN)
   @Patch('models/:id')
-  setModelActive(@Param('id') id: string, @Body() dto: UpdateRiskModelDto) {
-    return this.scoringService.setModelActive(id, dto.active);
+  setModelActive(@Param('id') id: string, @Body() dto: UpdateRiskModelDto, @CurrentUser() currentUser: JwtPayload) {
+    return this.scoringService.setModelActive(id, dto.active, currentUser);
   }
 
   // Visible to everyone, but non-ADMIN only ever sees scores computed

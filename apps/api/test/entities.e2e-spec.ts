@@ -25,6 +25,7 @@ describe('Entities catalog panel (e2e)', () => {
 
   afterAll(async () => {
     const prisma = app.get(PrismaService);
+    await prisma.auditLog.deleteMany({ where: { targetType: 'Entity', targetId: { in: entityIds } } });
     await prisma.entityLink.deleteMany({ where: { entityId: { in: entityIds } } });
     await prisma.entity.deleteMany({ where: { id: { in: entityIds } } });
     await prisma.user.deleteMany({ where: { email: { in: [editor.email, admin.email, plainUser.email] } } });
@@ -99,6 +100,56 @@ describe('Entities catalog panel (e2e)', () => {
       .send({ summary: 'updated summary' })
       .expect(200);
     expect(res.body.summary).toBe('updated summary');
+  });
+
+  it('writes an AuditLog ENTITY_EDIT entry (before/after) for a field edit, but not for a no-op update', async () => {
+    const entityId = await createEntity(editor.accessToken, 'auditedit');
+    await request(app.getHttpServer())
+      .patch(`/entities/${entityId}`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .send({ summary: 'first summary' })
+      .expect(200);
+
+    const prisma = app.get(PrismaService);
+    const logs = await prisma.auditLog.findMany({ where: { targetType: 'Entity', targetId: entityId } });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].action).toBe('ENTITY_EDIT');
+    expect(logs[0].actorId).toBe(editor.userId);
+    expect(logs[0].metadata).toMatchObject({
+      changedFields: { summary: { from: null, to: 'first summary' } },
+    });
+
+    // Sending the exact same value again is a no-op — no new log row.
+    await request(app.getHttpServer())
+      .patch(`/entities/${entityId}`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .send({ summary: 'first summary' })
+      .expect(200);
+    const logsAfterNoop = await prisma.auditLog.findMany({ where: { targetType: 'Entity', targetId: entityId } });
+    expect(logsAfterNoop).toHaveLength(1);
+  });
+
+  it('writes an AuditLog ENTITY_EDIT entry for adding and for removing a link', async () => {
+    const entityId = await createEntity(editor.accessToken, 'auditlink');
+    const created = await request(app.getHttpServer())
+      .post(`/entities/${entityId}/links`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .send({ kind: 'WEBSITE', url: 'https://example.com/audited' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .delete(`/entities/${entityId}/links/${created.body.id}`)
+      .set('Authorization', `Bearer ${editor.accessToken}`)
+      .expect(200);
+
+    const prisma = app.get(PrismaService);
+    const logs = await prisma.auditLog.findMany({
+      where: { targetType: 'Entity', targetId: entityId },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(logs).toHaveLength(2);
+    expect(logs[0].metadata).toMatchObject({ linkAdded: { kind: 'WEBSITE', url: 'https://example.com/audited' } });
+    expect(logs[1].metadata).toMatchObject({ linkRemoved: { kind: 'WEBSITE', url: 'https://example.com/audited' } });
   });
 
   it.each(['javascript:alert(1)', 'not-a-url', 'ftp://example.com'])(

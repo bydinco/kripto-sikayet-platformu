@@ -1,7 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Role, ReportStatus, WalletKind } from '@prisma/client';
+import { AuditAction, Role, ReportStatus, WalletKind } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RevalidateService } from '../revalidate/revalidate.service.js';
+import { AuditService } from '../audit/audit.service.js';
 import { CreateScoringDto } from './dto/create-scoring.dto.js';
 import { UpdateScoringDto } from './dto/update-scoring.dto.js';
 import { computeRiskScore, type RiskEngineInputs } from './risk-score-engine.js';
@@ -22,6 +23,7 @@ export class ScoringService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly revalidate: RevalidateService,
+    private readonly audit: AuditService,
   ) {}
 
   // Callers (report/response/evidence transitions, the recompute endpoint,
@@ -108,11 +110,12 @@ export class ScoringService {
     });
   }
 
-  async setModelActive(modelId: string, active: boolean) {
+  async setModelActive(modelId: string, active: boolean, currentUser: JwtPayload) {
     const model = await this.prisma.riskModel.findUnique({ where: { id: modelId } });
     if (!model) {
       throw new NotFoundException('Risk modeli bulunamadı.');
     }
+    const wasActive = model.active;
 
     if (active) {
       // Only one active version per entityType at a time.
@@ -135,6 +138,16 @@ export class ScoringService {
     // score fetches (see CLAUDE.md) plus the two pages that read the
     // active-models list directly.
     await this.revalidate.revalidate({ tags: ['methodology', 'home', 'scoring'] });
+
+    // Non-critical (unlike role assignment/user deletion): fire-and-
+    // forget, never blocks the response if the audit write itself fails.
+    await this.audit.record({
+      actorId: currentUser.sub,
+      action: active ? AuditAction.MODEL_ACTIVATE : AuditAction.MODEL_DEACTIVATE,
+      targetType: 'RiskModel',
+      targetId: modelId,
+      metadata: { entityType: model.entityType, version: model.version, wasActive, nowActive: active },
+    });
 
     return this.prisma.riskModel.findUnique({ where: { id: modelId }, include: { factors: true } });
   }

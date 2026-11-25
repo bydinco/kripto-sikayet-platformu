@@ -40,6 +40,7 @@ describe('Risk scoring — admin endpoints and visibility (e2e)', () => {
 
   afterAll(async () => {
     const prisma = app.get(PrismaService);
+    await prisma.auditLog.deleteMany({ where: { targetType: 'RiskModel', targetId: { in: modelIds } } });
     await prisma.riskScoreFactor.deleteMany({ where: { score: { entityId: { in: entityIds } } } });
     await prisma.riskScore.deleteMany({ where: { entityId: { in: entityIds } } });
     await prisma.entity.deleteMany({ where: { id: { in: entityIds } } });
@@ -168,6 +169,30 @@ describe('Risk scoring — admin endpoints and visibility (e2e)', () => {
       .set('Authorization', `Bearer ${moderator.accessToken}`)
       .send({ active: true })
       .expect(403);
+  });
+
+  it('writes an AuditLog MODEL_ACTIVATE/MODEL_DEACTIVATE entry when a model is (de)activated', async () => {
+    const model = await createExchangeModel(false);
+    await request(app.getHttpServer())
+      .patch(`/scoring/models/${model.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ active: true })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/scoring/models/${model.id}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .send({ active: false })
+      .expect(200);
+
+    const prisma = app.get(PrismaService);
+    const logs = await prisma.auditLog.findMany({
+      where: { targetType: 'RiskModel', targetId: model.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(logs).toHaveLength(2);
+    expect(logs[0].action).toBe('MODEL_ACTIVATE');
+    expect(logs[0].actorId).toBe(admin.userId);
+    expect(logs[1].action).toBe('MODEL_DEACTIVATE');
   });
 
   it('activating one model version deactivates every other version of the same entityType', async () => {
