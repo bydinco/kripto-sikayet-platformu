@@ -238,6 +238,26 @@ describe('Evidence file upload (e2e)', () => {
       expect(cacheControl).not.toContain('immutable');
     });
 
+    it('sends Cross-Origin-Resource-Policy: cross-origin, nosniff, and an explicit server-chosen Content-Disposition', async () => {
+      const reportId = await createPendingReport(await createEntity());
+      const uploaded = await uploadFile(reportId, author.accessToken, pngBuffer).expect(201);
+      await request(app.getHttpServer())
+        .patch(`/reports/${reportId}`)
+        .set('Authorization', `Bearer ${moderator.accessToken}`)
+        .send({ status: 'PUBLISHED', reason: 'ok' })
+        .expect(200);
+
+      // Evidence images are loaded cross-origin by <img> on the web app
+      // (a different origin/port even in dev) — without this header,
+      // helmet's same-origin default would make the browser refuse to
+      // render them (see the Playwright smoke suite's real cross-origin
+      // image load, test:smoke's report-flow.spec.ts).
+      const res = await getBinary(app.getHttpServer(), `/evidence/${uploaded.body.id}/file`).expect(200);
+      expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['content-disposition']).toBe('inline; filename="evidence.png"');
+    });
+
     it('sends Cache-Control: no-store for a non-public file (e.g. the author viewing their own pre-publication upload)', async () => {
       const reportId = await createPendingReport(await createEntity());
       const uploaded = await uploadFile(reportId, author.accessToken, pngBuffer).expect(201);

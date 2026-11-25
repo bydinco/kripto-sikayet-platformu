@@ -2,21 +2,29 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role } from '@prisma/client';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { buildHelmetOptions } from '../src/security-headers.js';
 
 export const TEST_PASSWORD = 'supersecret123';
 
 // The login/register/notices rate limiter is skipped when NODE_ENV=test
 // (see ThrottlerModule.forRoot in app.module.ts) — e2e tests legitimately
 // call those routes far more than a real client would in the same window.
+// Mirrors main.ts's bootstrap() (helmet + cookieParser + ValidationPipe),
+// which this helper builds independently of rather than calling — so
+// e2e tests exercise the same middleware stack main.ts does.
 export async function createTestApp(): Promise<INestApplication> {
   const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
-  const app = moduleFixture.createNestApplication();
+  const app = moduleFixture.createNestApplication<NestExpressApplication>();
+  app.use(helmet(buildHelmetOptions(process.env.NODE_ENV, false)));
   app.use(cookieParser());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+  app.useBodyParser('json', { limit: '100kb' });
   await app.init();
   return app;
 }

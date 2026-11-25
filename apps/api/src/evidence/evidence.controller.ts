@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { EvidenceService } from './evidence.service.js';
 import { EvidenceFileAccessService } from './files/evidence-file-access.service.js';
+import { EXT_BY_MIME } from './files/evidence-storage-key.js';
 import { CreateEvidenceDto } from './dto/create-evidence.dto.js';
 import { UpdateEvidenceDto } from './dto/update-evidence.dto.js';
 import { OptionalAuth } from '../common/decorators/optional-auth.decorator.js';
@@ -46,6 +47,11 @@ export class EvidenceController {
   ): Promise<void> {
     const { storageObject, mimeType, isPublic } = await this.evidenceFileAccess.getFile(id, currentUser);
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Defense-in-depth alongside nosniff + the server-side mime allowlist:
+    // explicit, server-chosen filename/extension, never the uploader's own
+    // filename (which is never even stored — see CLAUDE.md).
+    const ext = EXT_BY_MIME[mimeType as keyof typeof EXT_BY_MIME] ?? 'bin';
+    res.setHeader('Content-Disposition', `inline; filename="evidence.${ext}"`);
     // Short on purpose: a report can go REMOVED (or evidence unapproved)
     // at any time, and this bounds how long a downstream cache/browser can
     // keep serving a 200 after that — matches the S3 driver's signed-URL

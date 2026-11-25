@@ -11,24 +11,34 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { applyTrustProxy, resolveTrustProxyHops } from './trust-proxy.js';
 import { isSwaggerEnabled } from './swagger-enabled.js';
+import { buildHelmetOptions } from './security-headers.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   applyTrustProxy(app, resolveTrustProxyHops(process.env.TRUST_PROXY_HOPS));
+
+  const swaggerEnabled = isSwaggerEnabled(process.env.NODE_ENV, process.env.SWAGGER_ENABLED);
+  app.use(helmet(buildHelmetOptions(process.env.NODE_ENV, swaggerEnabled)));
   app.use(cookieParser());
   app.enableCors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:3002', credentials: true });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
+  // Every DTO in this API is small text fields — 100kb is generous
+  // headroom. File uploads go through multer (evidence files), which has
+  // its own, much larger MAX_FILE_SIZE_BYTES limit and never goes through
+  // this JSON body parser.
+  app.useBodyParser('json', { limit: '100kb' });
 
   // Both the dev server and the Playwright smoke suite run with
   // NODE_ENV!=='production', so this never affects them (the smoke
   // suite's webServer readiness probe polls /api/docs — see
   // e2e-smoke/playwright.config.ts).
-  if (isSwaggerEnabled(process.env.NODE_ENV, process.env.SWAGGER_ENABLED)) {
+  if (swaggerEnabled) {
     const config = new DocumentBuilder()
       .setTitle('Kripto Şikayet ve Risk Platformu API')
       .setDescription('Şikayet, kanıt, risk skoru, moderasyon ve bildirim uç noktaları')

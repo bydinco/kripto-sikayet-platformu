@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AllowedEvidenceMimeType } from './evidence-file.constants.js';
 
-const EXT_BY_MIME: Record<AllowedEvidenceMimeType, string> = {
+export const EXT_BY_MIME: Record<AllowedEvidenceMimeType, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
